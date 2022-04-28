@@ -397,28 +397,46 @@ def create_task(task):
     return ',\n          '.join(outp)
 
 def create_dag_string(dag):
-    '''
+    '''Method for generating a string of python that defines a dag. 
+
+    DAG parameters are provided and used to populate a string which can be
+    added to the target file.
+
+    args:
+        dag: A dictionary representing the DAG.  Used to create dag string
+
+    returns:
+        A string of python code that can be added to the target file
     '''
     log(f'STARTED',"INFO")
+    # we first set DAG defaults - these can also be excluded completely and
+    # use Environment settings
+    odag = {
+        'concurrency': 10,
+        'max_active_runs': 1,
+        'default_args': 'default_args',
+        'schedule_interval':None,
+        'start_date': 'datetime.now()',
+        'catchup': False
+    }
+
     for arg in ['concurrency','max_active_runs']:
         if arg in dag.keys():
-            if not type(dag[arg]) == int:
-                dag[arg] = 1
-        else:
-            dag[arg] = 1
+            if type(dag[arg]) == int:
+                odag[arg] = dag[arg]
 
-    if 'catchup' in dag.keys():
-        if not type(dag['catchup']) == bool:
-            dag['catchup'] = False
-    else:
-        dag['catchup'] = False
+    if 'catchup' in dag.keys() and type(dag['catchup']) == bool: odag[arg] = dag[arg]
 
     if 'tags' in dag.keys():
-        if not type(dag['tags']) == list:
-            dag['tags'] = []
-    else:
-        dag['tags'] = []
-    outp = f"'{dag['name']}',\n          concurrency={dag['concurrency']},\n          max_active_runs={dag['max_active_runs']},\n          default_args=default_args,\n          schedule_interval=None,\n          start_date=datetime.now(),\n          description='{dag['description']}',\n          catchup={dag['catchup']},\n          tags={dag['tags']}"
+        if type(dag['tags']) == list:
+            odag['tags'] = dag['tags']
+        else: 
+            odag['tags'] = [dag['tags']]
+
+    odag['description'] = f'"{dag["description"] if "description" in dag.keys() else dag["name"]}"'
+
+    outp = f"'{dag['name']}',{', '.join([f'{key} = {odag[key]}' for key in odag.keys()])}"
+
     log(f'COMPLETED SUCCESSFULLY',"INFO")
     return outp
 
