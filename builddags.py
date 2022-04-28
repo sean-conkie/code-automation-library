@@ -107,12 +107,12 @@ def main(args = {}):
 
 def create_table_task(task, properties):
     '''Method for generating parameters dictionary for standard create table sql.
-    
-    From 
+
+    Uses the task object to populate the required parameters for the BigQueryOperator.
 
     args:
         task: A dictionary of representing a task to be added to the DAG.  Used to 
-              task parameter string
+              create a task parameter string
         properties: DAG properties.  Used to obtain DAG level properties, such as
                     the staging dataset
 
@@ -270,16 +270,33 @@ def create_sql(task, dataset_staging=None):
     return outp
 
 def create_sql_select(task,tables):
+    '''Method for generating the select part of the SQL query.
+
+    Uses the columns supplied in the source_to_target array to create the select statement,
+    columns are aliased based on the tables dictionary which is created by create_sql_conditions
+    method.
+
+    args:
+        task: A dictionary of representing a task to be added to the DAG.  Used to 
+              create a task parameter string
+        tables: Dictionary containing all tables related to the query and an alias
+
+    returns:
+        A string which can be used a the select part of the SQL query.
     '''
-    
-    '''
+
     log(f'STARTED',"INFO")
     log(f'creating select list',"INFO")
     select = []
+    # for each column in the source_to_target we identify the source table and column,
+    # or where there is transformation use that in place of the source table and column,
+    # and target column.
     for i,column in enumerate(task['parameters']['source_to_target']):
         prefix = "select " if i == 0 else "       "
-        if 'source_name' in column.keys() and 'source_column' in column.keys():
-            source = f"{tables[column['source_name']]}.{column['source_column']}" 
+        source_name = task['parameters']['driving_table'] if not 'source_name' in column.keys() else column['source_name']
+        source_column = '' if not 'source_column' in column.keys() else column['source_column']
+        if 'source_column' in column.keys():
+            source = f"{tables[source_name]}.{source_column}" 
         else:
             transformation = column['transformation']
             for key in tables.keys():
@@ -287,10 +304,7 @@ def create_sql_select(task,tables):
 
             source = transformation
 
-        if not 'source_column' in column.keys():
-            column['source_column'] = ''
-
-        alias = column['name'].rjust(max((60 - len(f'{prefix}{source}') + len(column["name"])) - 1,1 + len(column["name"]))) if not column['name'] == column['source_column'] else ''
+        alias = column['name'].rjust(max((60 - len(f'{prefix}{source}') + len(column["name"])) - 1,1 + len(column["name"]))) if not column['name'] == source_column else ''
 
         select.append(f"{prefix}{source}{alias}")
         
