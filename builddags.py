@@ -3,6 +3,7 @@ import json
 import os
 import re
 import sys
+import traceback
 
 from datetime import datetime, timedelta
 from venv import create
@@ -403,7 +404,7 @@ def create_sql_conditions(task):
         right_table = ''
 
 
-    where = create_sql_where(task['parameters']['where'], tables, left_table, right_table) if 'where' in task['parameters'].keys() else ''
+    where = create_sql_where(task['parameters']['where'], tables) if 'where' in task['parameters'].keys() else ''
 
     outp = {
         'tables': tables,
@@ -414,7 +415,7 @@ def create_sql_conditions(task):
     log(f'COMPLETED SUCCESSFULLY',"INFO")
     return outp
 
-def create_sql_where(conditions, tables={}, left_table='', right_table=''):
+def create_sql_where(conditions, tables={}):
     '''Method for generating the where conditions of the SQL query.
 
     Uses the wehere object of the task to create the string.
@@ -422,8 +423,6 @@ def create_sql_where(conditions, tables={}, left_table='', right_table=''):
     args:
         conditions: list of dictionaries, each item contains the condition operator and the field(s) and/or value(s)
         tables: Dictionary containing all tables related to the query and an alias
-        left_table: the table representing the left side of the logic check
-        right_table: the table representing the right side of the logic check
 
     returns:
         A string which can be used a the where conditions of the SQL query.
@@ -432,15 +431,19 @@ def create_sql_where(conditions, tables={}, left_table='', right_table=''):
     log(f'creating where conditions:',"INFO")
     log(f'               conditions  - {conditions}',"INFO")
     log(f'               tables      - {tables}',"INFO")
-    log(f'               left_table  - {left_table}',"INFO")
-    log(f'               right_table - {right_table}',"INFO")
     
     where = []
     for i,condition in enumerate(conditions):
         prefix = " where " if i == 0 else "   and "
         
-        left = f"{condition['fields'][0].replace(left_table,f'{tables[left_table] if left_table in tables.keys() else left_table}').replace(right_table,f'{tables[right_table] if right_table in tables.keys() else right_table}')}"
-        right = f"{condition['fields'][1].replace(left_table,f'{tables[left_table] if left_table in tables.keys() else left_table}').replace(right_table,f'{tables[right_table] if right_table in tables.keys() else right_table}')}"
+        left_table_list = condition['fields'][0].split('.')
+        right_table_list = condition['fields'][1].split('.')
+
+        left_table = f'{left_table_list[0]}.{left_table_list[1]}' if len(left_table_list) > 1 else ''
+        right_table = f'{right_table_list[0]}.{right_table_list[1]}' if len(right_table_list) > 1 else ''
+
+        left = f"{condition['fields'][0].replace(left_table,f'{tables[left_table] if left_table in tables.keys() else left_table}')}"
+        right = f"{condition['fields'][1].replace(right_table,f'{tables[right_table] if right_table in tables.keys() else right_table}')}"
         where.append(f"{prefix}{left} {condition['operator']} {right}")
     
     log(f'COMPLETED SUCCESSFULLY',"INFO")
@@ -617,14 +620,14 @@ def log(message, type="INFO"):
     module = inspect.getmodule(frame[0])
     filename = module.__file__
     if type == 'IMPORTANT': 
-        log_prefix = '********************************************************************************\n'
-        log_sufix = '\n********************************************************************************'
+        log_prefix = '****************************************************************************************************\n'
+        log_sufix = '\n****************************************************************************************************'
         type = 'INFO'
     else:
         log_prefix = ''
         log_sufix = ''
 
-    log_message = f'{log_prefix}{datetime.now():%Y-%m-%d %H:%M:%S} {type}: ({os.path.basename(filename)} - {frame[3]}) {message}{log_sufix}'
+    log_message = f'{log_prefix}{datetime.now():%Y-%m-%d %H:%M:%S} {type}: {os.path.basename(filename).ljust(20)} {frame[3].ljust(20)} {message}{log_sufix}'
 
     if (LOGGING_MODE=='DEBUG' and type in ['INFO','WARNING','ERROR']) or (LOGGING_MODE=='WARNING' and type in ['WARNING','ERROR']) or LOGGING_MODE == type:
         if type == 'ERROR' or LOGGING_VERBOSE: print(log_message)
@@ -667,4 +670,10 @@ if __name__=="__main__":
     args = parse_args(sys.argv)
     LOGGING_VERBOSE = False if not '--verbose' in args.keys() else True
     LOGGING_MODE = 'DEBUG' if not '--log' in args.keys() else args['--log']
-    main(args)
+    try:
+        main(args)
+    except:
+        log(f'{traceback.format_exc():}',"ERROR")
+        log(f'{sys.exc_info()[1]:}',"ERROR")
+        log(f'dag files FAILED',"IMPORTANT")
+    
