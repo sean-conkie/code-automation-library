@@ -140,17 +140,38 @@ def create_table_task(task, properties):
     return outp
 
 def create_sql(task, dataset_staging=None):
-    '''
+    '''Method for generating a SQL query to be executed by the task.
+
+    This method uses the details supplied in the config to create a string containing
+    a SQL query.
+
+    Task contains a parameter table_type allowing the method to generate type 1 or type 2
+    logic.
+    
+    Calls: 
+        create_sql_conditions
+        create_sql_select
+        create_sql_where
+
+    args:
+        task: A dictionary of representing a task to be added to the DAG.  Used to 
+              create a task parameter string
+        dataset_staging: 
+        
+
+    returns:
+        A string representing the entire SQL query.
     '''
     log(f'STARTED',"INFO")
     sql = []
     target_dataset = '{dataset_publish}' if 'destination_dataset' not in task['parameters'].keys() else task['parameters']['destination_dataset']
+    write_disposition = 'WRITE_TRUNCATE' if not 'write_disposition' in task['parameters'].keys() else task['parameters']['write_disposition']
 
     log(f'creating sql for table type {task["parameters"]["target_type"]}',"INFO")
     if task['parameters']['target_type'] == 1:
         
-        log(f'set write disposition - "{task["parameters"]["write_disposition"]}"',"INFO")
-        if task['parameters']['write_disposition'] == 'WRITE_TRUNCATE':
+        log(f'set write disposition - "{write_disposition}"',"INFO")
+        if write_disposition == 'WRITE_TRUNCATE':
             sql.append(f"truncate table {target_dataset}.{task['parameters']['destination_table']};")
 
         sql.append(f"insert into {target_dataset}.{task['parameters']['destination_table']}")
@@ -183,19 +204,30 @@ def create_sql(task, dataset_staging=None):
         log(f"setting history parameters","INFO")
         partition_list = []
         for p in history['partition']:
-            partition_list.append(f'{p["source_name"]}.{p["source_column"]}' if 'source_column' in p.keys() else f'{p["transformation"]}')
+            source_name = p["source_name"] if 'source_name' in p.keys() else task['parameters']['driving_table']
+            source_column = p["source_column"] if 'source_column' in p.keys() else ''
+            partition_list.append(f'{source_name}.{source_column}' if 'source_column' in p.keys() else f'{p["transformation"]}')
         partition = ','.join(partition_list)
         
         order_list = []
         for p in history['order']:
-            order_list.append(f'{p["source_name"]}.{p["source_column"]}' if 'source_column' in p.keys() else f'{p["transformation"]}')
+            source_name = p["source_name"] if 'source_name' in p.keys() else task['parameters']['driving_table']
+            source_column = p["source_column"] if 'source_column' in p.keys() else ''
+            order_list.append(f'{source_name}.{source_column}' if 'source_column' in p.keys() else f'{p["transformation"]}')
         order = ','.join(order_list)
 
         log(f"add previous fields for {history['driving_column']}","INFO")
-        prev_task = {'parameters': {'source_to_target': []}}
+        prev_task = {
+            'parameters': {
+                'source_to_target': [],
+                'driving_table': task['parameters']['driving_table']
+            }
+        }
         prev_conditions = []
         for col in history['driving_column']:
-            cj = {"name": f"prev_{col['name']}", "transformation": f"lag({col['source_name']}.{col['source_column']},1) over(partition by {partition} order by {order})"} 
+            source_name = col["source_name"] if 'source_name' in col.keys() else task['parameters']['driving_table']
+            source_column = col["source_column"] if 'source_column' in col.keys() else ''
+            cj = {"name": f"prev_{col['name']}", "transformation": f"lag({source_name}.{source_column},1) over(partition by {partition} order by {order})"} 
             prev_task['parameters']['source_to_target'].append(cj)
             prev_conditions.append({
                 "operator": "<>",
@@ -245,7 +277,12 @@ def create_sql(task, dataset_staging=None):
             order_list.append(f'{p["name"]}')
         order = ','.join(order_list)
 
-        new_source_to_target = {'parameters': {'source_to_target': []}}
+        new_source_to_target = {
+            'parameters': {
+                'source_to_target': [],
+                'driving_table': task['parameters']['driving_table']
+            }
+        }
         for s in task['parameters']['source_to_target']:
             if s['name'] == 'effective_to_dt':
                 ns = {"name": s['name'], "transformation": f"lead(effective_from_dt,1,timestamp('2999-12-31 23:59:59')) over(partition by  {partition} order by {order})"} 
@@ -286,7 +323,8 @@ def create_sql_select(task,tables):
     '''
 
     log(f'STARTED',"INFO")
-    log(f'creating select list',"INFO")
+    log(f'creating select list from',"INFO")
+    log(f'                     task - {task}',"INFO")
     select = []
     # for each column in the source_to_target we identify the source table and column,
     # or where there is transformation use that in place of the source table and column,
@@ -312,7 +350,24 @@ def create_sql_select(task,tables):
     return select
 
 def create_sql_conditions(task):
-    ''''''
+    '''Method for generating the conditions for the SQL query.
+
+    This method uses the details supplied in the config to identify all tables used, 
+    to create SQL for any joins and calls create_sql_where for the where clause(s).
+
+    args:
+        task: A dictionary of representing a task to be added to the DAG.  Used to 
+              create a task parameter string
+        
+
+    returns:
+        A dictionary containing the tables dict, from statement and where clause for the sql
+        outp:
+            tables: Dictionary containing all tables related to the query and an alias
+            from: a string with the SQL from and join(s)
+            where: a string containing any where conditions
+    '''
+
     log(f'STARTED',"INFO")
     tables = {task['parameters']['driving_table']: "a"}
     i = 1
@@ -320,6 +375,9 @@ def create_sql_conditions(task):
     log(f'identifying join conditions',"INFO")
     if 'joins' in task['parameters'].keys():
         for join in task['parameters']['joins']:
+            left_table = ''
+            right_table = ''
+
             if 'left' in join.keys():
                 if not join['left'] in tables.keys():
                     tables[join['right']] = chr(i + 97)
@@ -357,7 +415,19 @@ def create_sql_conditions(task):
     return outp
 
 def create_sql_where(conditions, tables={}, left_table='', right_table=''):
-    ''''''
+    '''Method for generating the where conditions of the SQL query.
+
+    Uses the wehere object of the task to create the string.
+
+    args:
+        conditions: list of dictionaries, each item contains the condition operator and the field(s) and/or value(s)
+        tables: Dictionary containing all tables related to the query and an alias
+        left_table: the table representing the left side of the logic check
+        right_table: the table representing the right side of the logic check
+
+    returns:
+        A string which can be used a the where conditions of the SQL query.
+    '''
     log(f'STARTED',"INFO")
     log(f'creating where conditions:',"INFO")
     log(f'               conditions  - {conditions}',"INFO")
