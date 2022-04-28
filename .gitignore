@@ -1,7 +1,9 @@
 # directories
 *venv/
 __pycache__/
-*data/
+*data/*
+/.vscode/
+logs/*
 
-files
+# files
 *.zip

@@ -208,27 +208,20 @@
   },
 {
   "task_id": "td_offer_priceable_unit_soip",
-  "operator": "BigQueryOperator",
+  "operator": "CreateTable",
   "parameters": {
     "sql":"sql/spine_offer_td_offer_priceable_unit_soip.sql",
-    "destination_dataset_table": "",
-    "write_disposition": "WRITE_TRUNCATE",
-    "create_disposition": "CREATE_IF_NEEDED",
-    "allow_large_results": true,
-    "use_legacy_sql": false
+    "destination_table": "td_offer_priceable_unit_soip",
+    "destination_dataset": "uk_pre_customer_spine_offer_is"
   },
   "dependencies": []
 },
 {
   "task_id": "truncate_dim_offer_priceable_unit",
-  "operator": "BigQueryOperator",
+  "operator": "CreateTable",
   "parameters": {
     "sql":"truncate table uk_pub_customer_spine_offer_is.dim_offer_priceable_unit;",
-    "destination_dataset_table": "",
-    "write_disposition": "WRITE_TRUNCATE",
-    "create_disposition": "CREATE_IF_NEEDED",
-    "allow_large_results": true,
-    "use_legacy_sql": false
+    "destination_table": "dim_offer_priceable_unit"
   },
   "dependencies": ["td_offer_priceable_unit_soip", "td_offer_priceable_unit_core"]
 },
