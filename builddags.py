@@ -5,37 +5,56 @@ import re
 import sys
 
 from datetime import datetime, timedelta
+from venv import create
 from jinja2 import Environment, FileSystemLoader
 
+global LOGGING_MODE
+global LOGGING_VERBOSE
 LOGGING_MODE='DEBUG'
+LOGGING_VERBOSE = True
 
-def main(args):
-    '''
+def main(args = {}):
+    '''Main method for generating .py files containing DAGs from config files.
     
+    From JSON config file(s) supplied as a dir or file, generate a .py file
+    using template_dag.txt.  Loops through all configs provided and creates 
+    one .py file per config.
+
     args:
+        args: A dictionary of input parameters, defaults to empty dictionary.
+              Dictionary can contain one or more key value paris of;
+                --dir: source file path or directory containing config files
+                --out-dir: target output file path for .py files to be saved
 
     returns:
+        Saves .py files in output directory and returns;
+            0: succesful
+            1: failure'''
 
-
-    '''
-    log(f'dag files STARTED',"INFO")
-    dpath = "./cfg/job/" if '--dir' not in args.keys() else args['--dir']
-    opath = "./dags/" if '--out-dir' not in args.keys() else args['--out-dir']
+    log(f'dag files STARTED',"IMPORTANT")
+    dpath = "./cfg/dag/" if '--dir' not in args.keys() else args['--dir'] # set directory path to default if none provided
+    opath = "./dags/" if '--out-dir' not in args.keys() else args['--out-dir'] # set output path to default if none provided
     config_list = []
+
+    # create a list of config files using the source directory (dpath), if the 
+    # path provided is a file add id otherwise append each filename in directory
     try:
         log(f'creating config list',"INFO")
         if not os.path.isdir(dpath) and os.path.exists(dpath):
             config_list.append(dpath)
         else:
             for filename in os.listdir(dpath):
+                log(f'filename: {filename}',"INFO")
                 m = re.search(r'^cfg_.*\.json$',filename,re.IGNORECASE)
                 if m:
                     config_list.append(filename)
     except:
         log(f'{sys.exc_info()[0]:}',"ERROR")
         log(f'dag files FAILED',"INFO")
-        return
+        return 1
 
+    # for each config file identified use the content of the JSON to create
+    # the python statements needed to be inserted into the template
     for config in config_list:
         path = config if os.path.exists(config) else f'{dpath}{config}'
         cfg = get_config(path)
@@ -47,10 +66,13 @@ def main(args):
         tasks = []
         dependencies = []
 
+        # for each item in the task array, check the operator type and use this
+        # to determine the task parameters to be used
         for task in cfg['tasks']:
             log(f'creating task "{task["task_id"]}"',"INFO")
             if task['operator'] == 'CreateTable':
-                tasks.append(create_table_task(task,cfg["dag"]["properties"]))
+                task['parameters'] = create_table_task(task,cfg["dag"]["properties"])
+                task['operator'] = 'BigQueryOperator'
             
             tasks.append(create_task(task))
 
@@ -83,24 +105,42 @@ def main(args):
         with open(dag_file,'w') as outfile:
             outfile.write(output)
 
-    log(f'dag files COMPLETED SUCCESSFULLY',"INFO")
+    log(f'dag files COMPLETED SUCCESSFULLY',"IMPORTANT")
+    return 0
 
 def create_table_task(task, properties):
-    '''
-    '''
+    '''Method for generating parameters dictionary for standard create table sql.
+    
+    From 
 
-    dataset_staging = properties['dataset_staging']
-    dataset_publish = '{dataset_publish}' if not 'destination_dataset' in task['parameters'].keys() else task['parameters']['destination_dataset']
+    args:
+        task: A dictionary of representing a task to be added to the DAG.  Used to 
+              task parameter string
+        properties: DAG properties.  Used to obtain DAG level properties, such as
+                    the staging dataset
+
+    returns:
+        A dictionary containing expected parameters for the desired task (BigQueryOperator)
+    '''
 
     log(f'STARTED',"INFO")
-    outp = [f"{task['task_id']} = BigQueryOperator(task_id='{task['task_id']}',\n          create_disposition='CREATE_IF_NEEDED',\n          allow_large_results=True,\n          use_legacy_sql=False"]
-    outp.append(f'sql=f"""{create_sql(task, dataset_staging)}"""'),
-    outp.append(f"destination_dataset_table=f'{dataset_publish}.{task['parameters']['destination_table']}'")
-    outp.append(f"write_disposition='{task['parameters']['write_disposition']}'")
-    outp.append('dag=dag)')
-    rtrn = ',\n          '.join(outp)
+    dataset_staging = properties['dataset_staging']
+    dataset_publish = '{dataset_publish}' if not 'destination_dataset' in task['parameters'].keys() else task['parameters']['destination_dataset'] # set to use variable from target file if not in task parameters
+    destination_dataset_table = f"{dataset_publish}.{task['parameters']['destination_table']}"
+    sql = task['parameters']['sql'] if 'sql' in task['parameters'].keys() else f'{create_sql(task, dataset_staging)}' # if user has provided a link to a .sql file, use it otherwise look to create sql from source to target parameter
+    write_disposition = 'WRITE_TRUNCATE' if not 'write_disposition' in task['parameters'].keys() else f"{task['parameters']['write_disposition']}"
+
+    outp = {
+        'sql': sql,
+        'destination_dataset_table': destination_dataset_table,
+        'write_disposition': write_disposition,
+        'create_disposition': 'CREATE_IF_NEEDED',
+        'allow_large_results': True,
+        'use_legacy_sql': False
+    }
+
     log(f'COMPLETED SUCCESSFULLY',"INFO")
-    return rtrn
+    return outp
 
 def create_sql(task, dataset_staging=None):
     '''
@@ -326,20 +366,29 @@ def create_sql_where(conditions, tables={}, left_table='', right_table=''):
     return where
 
 def create_task(task):
-    '''
-    
+    '''Method for generating a string of python that defines a task. 
+
+    args:
+        task: A dictionary representing a task to be added to the DAG.  Used to 
+              task parameter string
+
+    returns:
+        A string of python code that can be added to the target file
     '''
     log(f'STARTED',"INFO")
     
     log(f'creating task {task["task_id"]} from:',"INFO")
-    log(f'                           parameters - {task["parameters"]} from:',"INFO")
+    log(f'                           parameters - {task["parameters"]}',"INFO")
 
     outp = [f"{task['task_id']} = {task['operator']}(task_id='{task['task_id']}'"]
+
+    # for each key:value pair in the tark parameters we perform checks based on 
+    # parameter type and create a value that can be appended to the string
     for key in task['parameters'].keys():
         if type(task['parameters'][key]) == int or type(task['parameters'][key]) == bool:
             value = task['parameters'][key]
         elif type(task['parameters'][key]) == str:
-            value = f"'{task['parameters'][key]}'"
+            value = f"f'''{task['parameters'][key]}'''"
 
         outp.append(f"{key} = {value}")
     outp.append('dag=dag)')
@@ -440,24 +489,56 @@ def get_config(path):
         return
 
 def log(message, type="INFO"):
+    '''
+
+    args:
+
+
+    returns:
+        
+    
+    '''
     frame = inspect.stack()[1]
     module = inspect.getmodule(frame[0])
     filename = module.__file__
+    if type == 'IMPORTANT': 
+        log_prefix = '********************************************************************************\n'
+        log_sufix = '\n********************************************************************************'
+        type = 'INFO'
+    else:
+        log_prefix = ''
+        log_sufix = ''
+
+    log_message = f'{log_prefix}{datetime.now():%Y-%m-%d %H:%M:%S} {type}: ({os.path.basename(filename)} - {frame[3]}) {message}{log_sufix}'
+
     if (LOGGING_MODE=='DEBUG' and type in ['INFO','WARNING','ERROR']) or (LOGGING_MODE=='WARNING' and type in ['WARNING','ERROR']) or LOGGING_MODE == type:
-        print(f'{datetime.now():%Y-%m-%d %H:%M:%S} {type}: ({os.fsdecode(filename)} - {frame[3]}) {message}')
+        if type == 'ERROR' or LOGGING_VERBOSE: print(log_message)
+        if not os.path.exists('./logs/'): os.makedirs('./logs/')
+        f = open(f'./logs/{os.path.basename(filename)}.log','a')
+        f.write(f'{log_message}\n')
+
     return
 
 def parse_args(args):
-    """ """
+    '''
+
+    args:
+
+
+    returns:
+        dictionary object
+    
+    '''
     arg_dict = {}
     arg_name = None
     position = -1
     
     for arg in args:
         ls = arg.split(',')
-        if arg_name ==None: position += 1
+        if arg_name == None: position += 1
         if ls[0].lstrip().rstrip().startswith('-'):
             arg_name = ls[0]
+            arg_dict[arg_name] = None
         else:
             if arg_name:
                 arg_dict[arg_name] = ls
@@ -468,4 +549,7 @@ def parse_args(args):
     return arg_dict
 
 if __name__=="__main__":
-    main(parse_args(sys.argv))
+    args = parse_args(sys.argv)
+    LOGGING_VERBOSE = False if not '--verbose' in args.keys() else True
+    LOGGING_MODE = 'DEBUG' if not '--log' in args.keys() else args['--log']
+    main(args)
