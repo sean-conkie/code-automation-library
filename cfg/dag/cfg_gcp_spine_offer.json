@@ -1,36 +1,16 @@
 {
+  "name": "GCP_SPINE_OFFER",
   "dag": {
-    "name": "GCP_SPINE_OFFER",
-    "args": {
-      "owner": "customerbtprod",
-      "email": ["sean.conkie@sky.uk"],
-      "depends_on_past": false,
-      "email_on_failure": false,
-      "email_on_retry": false,
-      "retries": 5,
-      "retry_delay": 60,
-      "queue": "",
-      "pool": "",
-      "priority_weight": 10,
-      "end_date": "",
-      "wait_for_downstream": false,
-      "sla": 7200,
-      "execution_timeout": 300,
-      "on_failure_callback": "",
-      "on_success_callback": "",
-      "on_retry_callback": "",
-      "sla_miss_callback": "",
-      "trigger_rule": ""
-    },
-    "concurrency": 5,
-    "max_active_runs": 1,
     "description": "Populates portfolio offer tables uk_pub_customer_spine_offer_is",
-    "catchup": false,
-    "tags": ["offer", "customer"],
-    "properties": {
-      "dataset_staging": "uk_pre_customer_spine_offer_is",
-      "dataset_publish": "uk_pub_customer_spine_offer_is"
-    }
+    "tags": ["offer", "customer"]
+  },
+  "args": {
+    "owner": "customerbtprod",
+    "email": ["sean.conkie@sky.uk"]
+  },
+  "properties": {
+    "dataset_staging": "uk_pre_customer_spine_offer_is",
+    "dataset_publish": "uk_pub_customer_spine_offer_is"
   },
   "imports": [],
   "tasks": [
