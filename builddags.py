@@ -58,10 +58,10 @@ def main(args = {}):
     for config in config_list:
         path = config if os.path.exists(config) else f'{dpath}{config}'
         cfg = get_config(path)
-        log(f"building dag - {cfg['dag']['name']}","INFO")
+        log(f"building dag - {cfg['name']}","INFO")
 
-        dag_string = create_dag_string(cfg['dag'])
-        default_args = create_dag_args(cfg['dag']['args'])
+        dag_string = create_dag_string(cfg['name'], cfg['dag']) # pass the dag excluding 
+        default_args = create_dag_args(cfg['args'])
         imports = '\n'.join(cfg['imports'])
         tasks = []
         dependencies = []
@@ -71,7 +71,7 @@ def main(args = {}):
         for task in cfg['tasks']:
             log(f'creating task "{task["task_id"]}"',"INFO")
             if task['operator'] == 'CreateTable':
-                task['parameters'] = create_table_task(task,cfg["dag"]["properties"])
+                task['parameters'] = create_table_task(task,cfg["properties"])
                 task['operator'] = 'BigQueryOperator'
             
             tasks.append(create_task(task))
@@ -89,10 +89,7 @@ def main(args = {}):
         for task in final_tasks:
             dependencies.append(f"{task} >> finish_pipeline")
 
-        properties = []
-        for key in cfg["dag"]["properties"].keys():
-            value = cfg["dag"]["properties"][key]
-            properties.append(f"{key} = '{value}'")
+        properties = [f"{key} = '{cfg['properties'][key]}'" for key in cfg["properties"].keys()]
 
         log(f'populating template',"INFO")
         file_loader = FileSystemLoader('./templates')
@@ -101,7 +98,7 @@ def main(args = {}):
         template = env.get_template('template_dag.txt')
         output = template.render(imports=imports, tasks=tasks, default_args=default_args, dag_string=dag_string, dependencies=dependencies, properties=properties)
         
-        dag_file = f"{opath}{cfg['dag']['name']}.py"
+        dag_file = f"{opath}{cfg['name']}.py"
         with open(dag_file,'w') as outfile:
             outfile.write(output)
 
@@ -396,7 +393,7 @@ def create_task(task):
     log(f'COMPLETED SUCCESSFULLY',"INFO")
     return ',\n          '.join(outp)
 
-def create_dag_string(dag):
+def create_dag_string(name, dag):
     '''Method for generating a string of python that defines a dag. 
 
     DAG parameters are provided and used to populate a string which can be
@@ -420,22 +417,19 @@ def create_dag_string(dag):
         'catchup': False
     }
 
-    for arg in ['concurrency','max_active_runs']:
-        if arg in dag.keys():
-            if type(dag[arg]) == int:
-                odag[arg] = dag[arg]
-
-    if 'catchup' in dag.keys() and type(dag['catchup']) == bool: odag[arg] = dag[arg]
-
-    if 'tags' in dag.keys():
-        if type(dag['tags']) == list:
-            odag['tags'] = dag['tags']
-        else: 
-            odag['tags'] = [dag['tags']]
+    for key in dag.keys():
+        if key in ['concurrency','max_active_runs']: 
+            if type(dag[key]) == int: odag[key] = dag[key] # only use provided value if it is an int
+        elif key in ['catchup']:
+            if type(dag[key]) == bool: odag[key] = dag[key] # only use provided value if it is an bool
+        elif key in ['tags'] and not type(dag['tags']) == list: # if tags not provided as a list, wrap in list
+            odag[key] = [dag[key]]
+        else:
+            odag[key] = dag[key]
 
     odag['description'] = f'"{dag["description"] if "description" in dag.keys() else dag["name"]}"'
 
-    outp = f"'{dag['name']}',{', '.join([f'{key} = {odag[key]}' for key in odag.keys()])}"
+    outp = f"'{name}',{', '.join([f'{key} = {odag[key]}' for key in odag.keys()])}"
 
     log(f'COMPLETED SUCCESSFULLY',"INFO")
     return outp
@@ -444,22 +438,41 @@ def create_dag_args(args):
     '''
     '''
     log(f'STARTED',"INFO")
-    default_args = []
+    oargs = {
+      'depends_on_past': False,
+      'email_on_failure': False,
+      'email_on_retry': False,
+      'retries': 5,
+      'retry_delay': 'timedelta(seconds=60)',
+      'queue': '',
+      'pool': '',
+      'priority_weight': 10,
+      'end_date': '',
+      'wait_for_downstream': False,
+      'sla': 'timedelta(seconds=7200)',
+      'execution_timeout': 'timedelta(seconds=300)',
+      'on_failure_callback': '',
+      'on_success_callback': '',
+      'on_retry_callback': '',
+      'sla_miss_callback': '',
+      'trigger_rule': ''
+    }
 
     for key in args.keys():
         if key in ['depends_on_past','email_on_failure','email_on_retry','wait_for_downstream']:
-            value = False if not type(args[key]) == bool else args[key]
-            default_args.append(f"'{key}': {value}")
+             if not type(args[key]) == bool: oargs[key] = args[key]
         elif key in ['retry_delay','sla','execution_timeout']:
-            if type(args[key]) == int:
-                default_args.append(f"'{key}': timedelta(seconds={args[key]})")
+            if type(args[key]) == int: oargs[key] = f"timedelta(seconds={args[key]})"
         elif key in ['email']:
             emails = ','.join([f"'{a}'" for a in args[key]])
-            default_args.append(f"'{key}': [{emails}]")
+            oargs[key] = f"[{emails}]"
+        elif key in ['priority_weight','retries']:
+            if type(args[key]) == int: oargs[key] = f"{args[key]}"
         elif not args[key] == "":
-            default_args.append(f"'{key}': '{args[key]}'")
+            oargs[key] = f"'{args[key]}'"
 
-    outp = f"{{{','.join(default_args)}}}"
+    outstr = ', '.join([f"'{key}':  {oargs[key]}" for key in oargs.keys() if not oargs[key] == ''])
+    outp = f"{{{outstr}}}"
 
     log(f'COMPLETED SUCCESSFULLY',"INFO")
     return outp
