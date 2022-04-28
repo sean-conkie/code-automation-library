@@ -1,0 +1,38 @@
+
+from airflow import DAG
+from airflow.contrib.operators.bigquery_operator import BigQueryOperator
+from airflow.operators.dummy_operator import DummyOperator
+from datetime import datetime, timedelta
+from airflow.contrib.operators.bigquery_check_operator import BigQueryCheckOperator
+
+{% for import in imports -%}
+    {{import}}
+{% endfor %}
+
+{% for prop in properties -%}
+    {{prop}}
+{% endfor %}
+
+default_args = {{ default_args }}
+
+with DAG({{ dag_string }}) as dag:
+
+
+    start_pipeline = DummyOperator(
+        task_id = 'start_pipeline',
+        dag = dag
+    )
+
+    {% for task in tasks -%}
+        {{task}}
+
+    {% endfor %}
+
+    finish_pipeline = DummyOperator(
+        task_id = 'finish_pipeline'
+    )
+
+  # Define task dependencies
+    {% for dep in dependencies -%}
+        {{dep}}
+    {% endfor %}

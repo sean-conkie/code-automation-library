@@ -1,0 +1,51 @@
+[{
+    "mode": "REQUIRED",
+    "name": "id",
+    "type": "STRING"
+  },
+  {
+    "mode": "REQUIRED",
+    "name": "offer_detail_id",
+    "type": "INTEGER"
+  },
+  {
+    "mode": "REQUIRED",
+    "name": "offer_type_id",
+    "type": "STRING"
+  },
+  {
+    "mode": "REQUIRED",
+    "name": "dw_last_modified_dt",
+    "type": "TIMESTAMP"
+  },
+  {
+    "mode": "REQUIRED",
+    "name": "created_dt",
+    "type": "TIMESTAMP"
+  },
+  {
+    "mode": "REQUIRED",
+    "name": "created_by_id",
+    "type": "STRING"
+  },
+  {
+    "mode": "REQUIRED",
+    "name": "last_modified_dt",
+    "type": "TIMESTAMP"
+  },
+  {
+    "mode": "REQUIRED",
+    "name": "last_modified_by_id",
+    "type": "STRING"
+  },
+  {
+    "mode": "REQUIRED",
+    "name": "code",
+    "type": "STRING"
+  },
+  {
+    "mode": "REQUIRED",
+    "name": "description",
+    "type": "STRING"
+  }
+]

@@ -1,0 +1,37 @@
+{
+  "dag" : {
+    "name": "",
+    "owner": "",
+    "email": [],
+    "depends_on_past": false,
+    "email_on_failure": "",
+    "email_on_retry": "",
+    "retry_delay": 60,
+    "queue": "",
+    "pool": "",
+    "priority_weight": "",
+    "end_date": "",
+    "wait_for_downstream": "",
+    "sla": "",
+    "execution_timeout": "",
+    "on_failure_callback": "",
+    "on_success_callback": "",
+    "on_retry_callback": "",
+    "sla_miss_callback": "",
+    "trigger_rule": "",
+    "start_date": "",
+    "schedule_interval": "",
+    "concurrency": 5,
+    "max_active_runs": 1,         
+    "description": "",
+    "catchup": "False",
+    "tags": [],
+    "properties": {"property_name": "value or env variable"}
+  },
+  "tasks": [{
+    "task_id": "",
+    "operator": "",
+    "parameters": {}
+  }],
+  "dependencies": []
+}

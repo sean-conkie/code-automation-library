@@ -1,0 +1,136 @@
+[{
+    "name": "paging",
+    "type": "RECORD",
+    "mode": "NULLABLE",
+    "fields": [{
+        "name": "total",
+        "type": "INTEGER",
+        "mode": "NULLABLE"
+      },
+      {
+        "name": "current",
+        "type": "INTEGER",
+        "mode": "NULLABLE"
+      }
+    ]
+  },
+  {
+    "name": "results",
+    "type": "INTEGER",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "parameters",
+    "type": "RECORD",
+    "mode": "NULLABLE",
+    "fields": [{
+        "name": "season",
+        "type": "INTEGER",
+        "mode": "NULLABLE"
+      },
+      {
+        "name": "league",
+        "type": "INTEGER",
+        "mode": "NULLABLE"
+      }
+    ]
+  },
+  {
+    "name": "errors",
+    "type": "STRING",
+    "mode": "REPEATED"
+  },
+  {
+    "name": "response",
+    "type": "RECORD",
+    "mode": "REPEATED",
+    "fields": [{
+        "name": "venue",
+        "type": "RECORD",
+        "mode": "NULLABLE",
+        "fields": [{
+            "name": "surface",
+            "type": "STRING",
+            "mode": "NULLABLE"
+          },
+          {
+            "name": "capacity",
+            "type": "INTEGER",
+            "mode": "NULLABLE"
+          },
+          {
+            "name": "image",
+            "type": "STRING",
+            "mode": "NULLABLE"
+          },
+          {
+            "name": "city",
+            "type": "STRING",
+            "mode": "NULLABLE"
+          },
+          {
+            "name": "address",
+            "type": "STRING",
+            "mode": "NULLABLE"
+          },
+          {
+            "name": "name",
+            "type": "STRING",
+            "mode": "NULLABLE"
+          },
+          {
+            "name": "id",
+            "type": "INTEGER",
+            "mode": "NULLABLE"
+          }
+        ]
+      },
+      {
+        "name": "team",
+        "type": "RECORD",
+        "mode": "NULLABLE",
+        "fields": [{
+            "name": "logo",
+            "type": "STRING",
+            "mode": "NULLABLE"
+          },
+          {
+            "name": "country",
+            "type": "STRING",
+            "mode": "NULLABLE"
+          },
+          {
+            "name": "name",
+            "type": "STRING",
+            "mode": "NULLABLE"
+          },
+          {
+            "name": "founded",
+            "type": "INTEGER",
+            "mode": "NULLABLE"
+          },
+          {
+            "name": "code",
+            "type": "STRING",
+            "mode": "NULLABLE"
+          },
+          {
+            "name": "national",
+            "type": "BOOLEAN",
+            "mode": "NULLABLE"
+          },
+          {
+            "name": "id",
+            "type": "INTEGER",
+            "mode": "NULLABLE"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "get",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  }
+]

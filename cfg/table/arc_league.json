@@ -1,0 +1,209 @@
+[
+  {
+    "name": "file_name",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "file_dt",
+    "type": "TIMESTAMP",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "load_dt",
+    "type": "TIMESTAMP",
+    "mode": "REQUIRED"
+  },{
+    "name": "paging",
+    "type": "RECORD",
+    "mode": "REPEATED",
+    "fields": [{
+        "name": "total",
+        "type": "INTEGER",
+        "mode": "NULLABLE"
+      },
+      {
+        "name": "current",
+        "type": "INTEGER",
+        "mode": "NULLABLE"
+      }
+    ]
+  },
+  {
+    "name": "results",
+    "type": "INTEGER",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "parameters",
+    "type": "RECORD",
+    "mode": "REPEATED",
+    "fields": [{
+      "name": "season",
+      "type": "INTEGER",
+      "mode": "NULLABLE"
+    }]
+  },
+  {
+    "name": "errors",
+    "type": "STRING",
+    "mode": "REPEATED"
+  },
+  {
+    "name": "response",
+    "type": "RECORD",
+    "mode": "REPEATED",
+    "fields": [{
+        "name": "country",
+        "type": "RECORD",
+        "mode": "REPEATED",
+        "fields": [{
+            "name": "flag",
+            "type": "STRING",
+            "mode": "NULLABLE"
+          },
+          {
+            "name": "code",
+            "type": "STRING",
+            "mode": "NULLABLE"
+          },
+          {
+            "name": "name",
+            "type": "STRING",
+            "mode": "NULLABLE"
+          }
+        ]
+      },
+      {
+        "name": "seasons",
+        "type": "RECORD",
+        "mode": "REPEATED",
+        "fields": [{
+            "name": "end",
+            "type": "DATE",
+            "mode": "NULLABLE"
+          },
+          {
+            "name": "start",
+            "type": "DATE",
+            "mode": "NULLABLE"
+          },
+          {
+            "name": "coverage",
+            "type": "RECORD",
+            "mode": "REPEATED",
+            "fields": [{
+                "name": "injuries",
+                "type": "BOOLEAN",
+                "mode": "NULLABLE"
+              },
+              {
+                "name": "top_cards",
+                "type": "BOOLEAN",
+                "mode": "NULLABLE"
+              },
+              {
+                "name": "top_assists",
+                "type": "BOOLEAN",
+                "mode": "NULLABLE"
+              },
+              {
+                "name": "players",
+                "type": "BOOLEAN",
+                "mode": "NULLABLE"
+              },
+              {
+                "name": "odds",
+                "type": "BOOLEAN",
+                "mode": "NULLABLE"
+              },
+              {
+                "name": "standings",
+                "type": "BOOLEAN",
+                "mode": "NULLABLE"
+              },
+              {
+                "name": "top_scorers",
+                "type": "BOOLEAN",
+                "mode": "NULLABLE"
+              },
+              {
+                "name": "predictions",
+                "type": "BOOLEAN",
+                "mode": "NULLABLE"
+              },
+              {
+                "name": "fixtures",
+                "type": "RECORD",
+                "mode": "REPEATED",
+                "fields": [{
+                    "name": "statistics_players",
+                    "type": "BOOLEAN",
+                    "mode": "NULLABLE"
+                  },
+                  {
+                    "name": "statistics_fixtures",
+                    "type": "BOOLEAN",
+                    "mode": "NULLABLE"
+                  },
+                  {
+                    "name": "lineups",
+                    "type": "BOOLEAN",
+                    "mode": "NULLABLE"
+                  },
+                  {
+                    "name": "events",
+                    "type": "BOOLEAN",
+                    "mode": "NULLABLE"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "current",
+        "type": "BOOLEAN",
+        "mode": "NULLABLE"
+      },
+      {
+        "name": "year",
+        "type": "INTEGER",
+        "mode": "NULLABLE"
+      }
+    ]
+  },
+  {
+    "name": "league",
+    "type": "RECORD",
+    "mode": "REPEATED",
+    "fields": [{
+        "name": "type",
+        "type": "STRING",
+        "mode": "NULLABLE"
+      },
+      {
+        "name": "name",
+        "type": "STRING",
+        "mode": "NULLABLE"
+      },
+      {
+        "name": "logo",
+        "type": "STRING",
+        "mode": "NULLABLE"
+      },
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "mode": "NULLABLE"
+      }
+    ]
+  },
+  {
+    "name": "get",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  }
+
+]
