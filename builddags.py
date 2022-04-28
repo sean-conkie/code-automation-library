@@ -61,7 +61,7 @@ def main(args = {}):
         cfg = get_config(path)
         log(f"building dag - {cfg['name']}","INFO")
 
-        dag_string = create_dag_string(cfg['name'], cfg['dag']) # pass the dag excluding 
+        dag_string = create_dag_string(cfg['name'], cfg['dag'])
         default_args = create_dag_args(cfg['args'])
         imports = '\n'.join(cfg['imports'])
         tasks = []
@@ -79,11 +79,33 @@ def main(args = {}):
 
             if 'dependencies' in task.keys():
                 if len(task['dependencies']) > 0:
+                    # for each entry in the dependencies array, add the item as a dependency.
+                    # where the dependency is on an external task, create an external task if 
+                    # no task already exists
                     for dep in task['dependencies']:
-                        dependencies.append(f"{dep} >> {task['task_id']}")
+                        dep_list = dep.split('.')
+                        if len(dep_list) > 1:
+                            dep_task = f'ext_{dep_list[1]}'
+                            if not dep_task in [t.split(' ')[0].strip() for t in tasks]:
+                                ext_task = {
+                                    "task_id": f"{dep_task}",
+                                    "operator": "ExternalTaskSensor",
+                                    "parameters": {
+                                        'external_dag_id': dep_list[0],
+                                        'external_task_id': dep_list[1],
+                                        'check_existence': True,
+                                        'allowed_states': ['success'],
+                                        'failed_states': ['failed', 'skipped'],
+                                        'mode': "reschedule",
+                                    }
+                                }
+                                tasks.append(create_task(ext_task))
+                        else:
+                            dep_task = dep
+                        dependencies.append(f"{dep_task} >> {task['task_id']}")
                 else:
                     dependencies.append(f"start_pipeline >> {task['task_id']}")
-                
+
         dep_tasks = [d[0].strip() for d in [dep.split('>') for dep in dependencies]]
         final_tasks = [task['task_id'] for task in cfg['tasks'] if not task['task_id'] in dep_tasks]
 
@@ -473,6 +495,8 @@ def create_task(task):
             value = task['parameters'][key]
         elif type(task['parameters'][key]) == str:
             value = f"f'''{task['parameters'][key]}'''"
+        else:
+            value = f"{task['parameters'][key]}"
 
         outp.append(f"{key} = {value}")
     outp.append('dag=dag)')

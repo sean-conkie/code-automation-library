@@ -2,8 +2,8 @@
 from airflow import DAG
 from airflow.contrib.operators.bigquery_operator import BigQueryOperator
 from airflow.operators.dummy_operator import DummyOperator
+from airflow.sensors.external_task import ExternalTaskSensor
 from datetime import datetime, timedelta
-from airflow.contrib.operators.bigquery_check_operator import BigQueryCheckOperator
 
 {% for import in imports -%}
     {{import}}
