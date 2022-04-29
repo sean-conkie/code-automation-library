@@ -100,6 +100,7 @@ def main(args = {}):
                                     }
                                 }
                                 tasks.append(create_task(ext_task))
+                                dependencies.append(f"start_pipeline >> {dep_task}")
                         else:
                             dep_task = dep
                         dependencies.append(f"{dep_task} >> {task['task_id']}")
