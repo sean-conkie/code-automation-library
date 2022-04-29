@@ -94,6 +94,7 @@ def main(args = {}):
                                         'external_dag_id': dep_list[0],
                                         'external_task_id': dep_list[1],
                                         'check_existence': True,
+                                        'timeout': 600,
                                         'allowed_states': ['success'],
                                         'failed_states': ['failed', 'skipped'],
                                         'mode': "reschedule",
