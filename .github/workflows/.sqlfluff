@@ -1,0 +1,140 @@
+[sqlfluff]
+verbose = 0
+nocolor = False
+dialect = bigquery
+templater = jinja
+rules = None
+exclude_rules = L017, L017, L026, L028, L031, L034, L042
+recurse = 0
+output_line_length = 80
+runaway_limit = 10
+ignore = None
+ignore_templated_areas = True
+encoding = autodetect
+disable_noqa = False
+sql_file_exts = .sql,.sql.j2,.dml,.ddl
+fix_even_unparsable = False
+
+[sqlfluff:indentation]
+indented_joins = False
+indented_ctes = False
+indented_using_on = False
+template_blocks_indent = True
+
+[sqlfluff:templater]
+unwrap_wrapped_queries = True
+
+[sqlfluff:templater:jinja]
+apply_dbt_builtins = True
+
+[sqlfluff:rules]
+tab_space_size = 2
+max_line_length = 80
+indent_unit = space
+comma_style = trailing
+allow_scalar = True
+single_table_references = consistent
+unquoted_identifiers_policy = all
+
+
+[sqlfluff:rules:L003]
+# Indentation not consistent with previous lines.
+hanging_indents = True
+
+[sqlfluff:rules:L007]
+# Operators should follow a standard for being before/after newlines.
+operator_new_lines = after
+
+[sqlfluff:rules:L010]
+# Inconsistent capitalisation of keywords.
+capitalisation_policy = lower
+ignore_words = None
+ignore_words_regex = None
+
+[sqlfluff:rules:L011]
+# Implicit/explicit aliasing of tables.
+aliasing = implicit
+
+[sqlfluff:rules:L012]
+# Implicit/explicit aliasing of columns.
+aliasing = implicit
+
+[sqlfluff:rules:L014]
+# Inconsistent capitalisation of unquoted identifiers.
+extended_capitalisation_policy = lower
+ignore_words = None
+ignore_words_regex = None
+
+[sqlfluff:rules:L019]
+# Leading/Trailing comma enforcement.
+comma_style = trailing
+
+[sqlfluff:rules:L029]
+# Keywords should not be used as identifiers.
+unquoted_identifiers_policy = aliases
+quoted_identifiers_policy = None
+ignore_words = None
+ignore_words_regex = None
+
+[sqlfluff:rules:L030]
+# Function names
+extended_capitalisation_policy = lower
+ignore_words = None
+ignore_words_regex = None
+
+[sqlfluff:rules:L038]
+# Trailing commas within select clause.
+select_clause_trailing_comma = forbid
+
+[sqlfluff:rules:L040]
+# Null & Boolean Literals
+capitalisation_policy = lower
+ignore_words = None
+ignore_words_regex = None
+
+[sqlfluff:rules:L047]
+# Consistent syntax to count all rows
+prefer_count_1 = False
+prefer_count_0 = False
+
+[sqlfluff:rules:L051]
+# Fully qualify JOIN clause
+fully_qualify_join_types = inner
+
+[sqlfluff:rules:L052]
+# Semi-colon formatting approach
+multiline_newline = False
+require_final_semicolon = False
+
+[sqlfluff:rules:L054]
+# GROUP BY/ORDER BY column references
+group_by_and_order_by_style = implicit
+
+[sqlfluff:rules:L057]
+# Special characters in identifiers
+unquoted_identifiers_policy = all
+quoted_identifiers_policy = all
+allow_space_in_identifier = False
+additional_allowed_characters = ""
+ignore_words = None
+ignore_words_regex = None
+
+[sqlfluff:rules:L059]
+# Policy on quoted and unquoted identifiers
+prefer_quoted_identifiers = False
+ignore_words = None
+ignore_words_regex = None
+
+[sqlfluff:rules:L062]
+# Comma separated list of blocked words that should not be used
+blocked_words = all, and, any, array, as, asc, assert_rows_modified, at, between, by, case, cast, collate, contains, create, cross, cube, current, default, define, desc, distinct, else, end, enum, escape, except, exclude, exists, extract, false, fetch, following, for, from, full, group, grouping, groups, hash, having, if, ignore, in, inner, intersect, interval, into, is, join, lateral, left, like, limit, lookup, merge, natural, new, no, not, null, nulls, of, on, or, order, outer, over, partition, preceding, proto, range, recursive, respect, right, rollup, rows, select, set, some, struct, tablesample, then, to, treat, true, unbounded, union, unnest, using, when, where, window, with, within
+
+[sqlfluff:rules:L063]
+# Data Types
+extended_capitalisation_policy = lower
+ignore_words = None
+ignore_words_regex = None
+
+[sqlfluff:rules:L064]
+# Consistent usage of preferred quotes for quoted literals
+preferred_quoted_literal_style = single_quotes

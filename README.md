@@ -1,9 +1,5 @@
 # sconkie-cloud-composer
-A data pipeline using Cloud Composer and other GCP tools
-
-
-
-
+A data pipeline using Cloud Composer and other GCP tools.
 
 ## Resources
 ### Airflow
@@ -16,3 +12,9 @@ A data pipeline using Cloud Composer and other GCP tools
 [Jinja Tutorial](https://zetcode.com/python/jinja/) - From a blog, basic Jinja templating tutorial
 
 [Jinja Docs](https://jinja.palletsprojects.com/en/3.1.x/)
+
+## GitHub Actions
+### super-linter
+
+#### SQLFluff
+[Rules](https://docs.sqlfluff.com/en/stable/rules.html)
