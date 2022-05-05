@@ -8,6 +8,10 @@ A data pipeline using Cloud Composer and other GCP tools.
 [Running Airflow in Docker](https://airflow.apache.org/docs/apache-airflow/stable/start/docker.html)
 
 [Cross-DAG Dependencies](https://airflow.apache.org/docs/apache-airflow/stable/howto/operator/external_task_sensor.html#cross-dag-dependencies)
+
+### Cloud Composer
+[Service Aaccount Roles](https://cloud.google.com/composer/docs/composer-2/access-control)
+
 ### Jinja Templating
 [Jinja Tutorial](https://zetcode.com/python/jinja/) - From a blog, basic Jinja templating tutorial
 
