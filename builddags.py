@@ -15,7 +15,7 @@ LOGGING_MODE = "DEBUG"
 LOGGING_VERBOSE = True
 
 
-def main(args={}):
+def main(args: dict = {}) -> int:
     """Main method for generating .py files containing DAGs from config files.
 
     From JSON config file(s) supplied as a dir or file, generate a .py file
@@ -31,7 +31,8 @@ def main(args={}):
     returns:
         Saves .py files in output directory and returns;
             0: succesful
-            1: failure"""
+            1: failure
+    """
 
     log(f"dag files STARTED", "IMPORTANT")
     dpath = (
@@ -147,7 +148,7 @@ def main(args={}):
     return 0
 
 
-def create_table_task(task, properties):
+def create_table_task(task: dict, properties: dict) -> dict:
     """Method for generating parameters dictionary for standard create table sql.
 
     Uses the task object to populate the required parameters for the BigQueryOperator.
@@ -196,7 +197,7 @@ def create_table_task(task, properties):
     return outp
 
 
-def create_sql(task, dataset_staging=None):
+def create_sql(task: dict, dataset_staging: str = None) -> str:
     """Method for generating a SQL query to be executed by the task.
 
     This method uses the details supplied in the config to create a string containing
@@ -210,14 +211,13 @@ def create_sql(task, dataset_staging=None):
         create_sql_select
         create_sql_where
 
-    args:
-        task: A dictionary of representing a task to be added to the DAG.  Used to
-              create a task parameter string
-        dataset_staging:
+    Args:
+      task (dict): A dictionary of representing a task to be added to the DAG.  Used to create a task
+    parameter string
+      dataset_staging (str): The name of the staging dataset.
 
-
-    returns:
-        A string representing the entire SQL query.
+    Returns:
+      A string containing the SQL query to be executed by the task.
     """
     log(f"STARTED", "INFO")
     sql = []
@@ -427,7 +427,7 @@ def create_sql(task, dataset_staging=None):
     return outp
 
 
-def create_sql_select(task, tables):
+def create_sql_select(task: dict, tables: dict) -> str:
     """Method for generating the select part of the SQL query.
 
     Uses the columns supplied in the source_to_target array to create the select statement,
@@ -486,7 +486,7 @@ def create_sql_select(task, tables):
     return select
 
 
-def create_sql_conditions(task):
+def create_sql_conditions(task: dict) -> dict:
     """Method for generating the conditions for the SQL query.
 
     This method uses the details supplied in the config to identify all tables used,
@@ -561,7 +561,7 @@ def create_sql_conditions(task):
     return outp
 
 
-def create_sql_where(conditions, tables={}):
+def create_sql_where(conditions: list, tables: dict = {}) -> str:
     """Method for generating the where conditions of the SQL query.
 
     Uses the wehere object of the task to create the string.
@@ -604,7 +604,7 @@ def create_sql_where(conditions, tables={}):
     return where
 
 
-def create_task(task):
+def create_task(task: dict) -> str:
     """Method for generating a string of python that defines a task.
 
     args:
@@ -641,17 +641,19 @@ def create_task(task):
     return ",\n          ".join(outp)
 
 
-def create_dag_string(name, dag):
+def create_dag_string(name: str, dag: dict) -> str:
     """Method for generating a string of python that defines a dag.
 
     DAG parameters are provided and used to populate a string which can be
     added to the target file.
 
-    args:
-        dag: A dictionary representing the DAG.  Used to create dag string
 
-    returns:
-        A string of python code that can be added to the target file
+    Args:
+      name (str): The name of the DAG.
+      dag (dict): A dictionary representing the DAG.  Used to create dag string
+
+    Returns:
+      A string of python code that can be added to the target file
     """
     log(f"STARTED", "INFO")
     # we first set DAG defaults - these can also be excluded completely and
@@ -689,8 +691,17 @@ def create_dag_string(name, dag):
     return outp
 
 
-def create_dag_args(args):
-    """ """
+def create_dag_args(args: dict) -> str:
+    """
+    > This function takes a dictionary of arguments and returns a string that can be used to create a
+    DAG in Airflow
+
+    Args:
+      args (dict): dict = {
+
+    Returns:
+      A string that is a dictionary of arguments for the DAG.
+    """
     log(f"STARTED", "INFO")
     oargs = {
         "depends_on_past": False,
@@ -742,15 +753,16 @@ def create_dag_args(args):
     return outp
 
 
-def get_config(path):
-    """Method to load config file and retun dictionary object
+def get_config(path: str) -> dict:
+    """
+    This function takes a path to a config file and returns a
+    dictionary object
 
-    args:
+    Args:
+      path: The path to the config file you want to read.
 
-
-    returns:
-        dictionary object
-
+    Returns:
+      A dictionary object
     """
 
     log(f"STARTED", "INFO")
@@ -785,15 +797,17 @@ def get_config(path):
         return
 
 
-def log(message, type="INFO"):
+def log(message: str, type: str = "INFO") -> None:
     """
+    It takes a message and a type, and prints the message to the console and to a log file if the type
+    is equal to the logging mode or if the logging mode is DEBUG and the type is INFO, WARNING, or ERROR
 
-    args:
+    Args:
+      message (str): The message to be logged.
+      type (str): str = "INFO". Defaults to INFO
 
-
-    returns:
-
-
+    Returns:
+      None
     """
     frame = inspect.stack()[1]
     module = inspect.getmodule(frame[0])
@@ -823,15 +837,15 @@ def log(message, type="INFO"):
     return
 
 
-def parse_args(args):
+def parse_args(args: list) -> dict:
     """
+    It takes a list of arguments and returns a dictionary of arguments
 
-    args:
+    Args:
+      args (list): list
 
-
-    returns:
-        dictionary object
-
+    Returns:
+      A dictionary with the arguments as keys and the values as values.
     """
     arg_dict = {}
     arg_name = None
