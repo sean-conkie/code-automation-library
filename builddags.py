@@ -6,16 +6,11 @@ import sys
 import traceback
 
 from datetime import datetime, timedelta
-from venv import create
 from jinja2 import Environment, FileSystemLoader
-
-global LOGGING_MODE
-global LOGGING_VERBOSE
-LOGGING_MODE = "DEBUG"
-LOGGING_VERBOSE = True
+from logger import ILogger
 
 
-def main(args: dict = {}) -> int:
+def main(logger: ILogger, args: dict = {}) -> int:
     """Main method for generating .py files containing DAGs from config files.
 
     From JSON config file(s) supplied as a dir or file, generate a .py file
@@ -34,7 +29,7 @@ def main(args: dict = {}) -> int:
             1: failure
     """
 
-    log(f"dag files STARTED", "IMPORTANT")
+    logger.info(f"dag files STARTED".center(100, '-'))
     dpath = (
         "./cfg/dag/" if "--dir" not in args.keys() else args["--dir"]
     )  # set directory path to default if none provided
@@ -46,18 +41,18 @@ def main(args: dict = {}) -> int:
     # create a list of config files using the source directory (dpath), if the
     # path provided is a file add id otherwise append each filename in directory
     try:
-        log(f"creating config list", "INFO")
+        logger.info(f"{pop_stack()} - creating config list")
         if not os.path.isdir(dpath) and os.path.exists(dpath):
             config_list.append(dpath)
         else:
             for filename in os.listdir(dpath):
-                log(f"filename: {filename}", "INFO")
+                logger.debug(f"filename: {filename}")
                 m = re.search(r"^cfg_.*\.json$", filename, re.IGNORECASE)
                 if m:
                     config_list.append(filename)
     except:
-        log(f"{sys.exc_info()[0]:}", "ERROR")
-        log(f"dag files FAILED", "INFO")
+        logger.error(f"{pop_stack()} - {sys.exc_info()[0]:}")
+        logger.info(f"{pop_stack()} - dag files FAILED")
         return 1
 
     # for each config file identified use the content of the JSON to create
@@ -65,7 +60,7 @@ def main(args: dict = {}) -> int:
     for config in config_list:
         path = config if os.path.exists(config) else f"{dpath}{config}"
         cfg = get_config(path)
-        log(f"building dag - {cfg['name']}", "INFO")
+        logger.info(f"{pop_stack()} - building dag - {cfg['name']}")
 
         dag_string = create_dag_string(cfg["name"], cfg["dag"])
         default_args = create_dag_args(cfg["args"])
@@ -76,7 +71,7 @@ def main(args: dict = {}) -> int:
         # for each item in the task array, check the operator type and use this
         # to determine the task parameters to be used
         for task in cfg["tasks"]:
-            log(f'creating task "{task["task_id"]}"', "INFO")
+            logger.info(f'{pop_stack()} - creating task "{task["task_id"]}"')
             if task["operator"] == "CreateTable":
                 task["parameters"] = create_table_task(task, cfg["properties"])
                 task["operator"] = "BigQueryOperator"
@@ -126,7 +121,7 @@ def main(args: dict = {}) -> int:
             f"{key} = '{cfg['properties'][key]}'" for key in cfg["properties"].keys()
         ]
 
-        log(f"populating template", "INFO")
+        logger.info(f"{pop_stack()} - populating template")
         file_loader = FileSystemLoader("./templates")
         env = Environment(loader=file_loader)
 
@@ -144,7 +139,7 @@ def main(args: dict = {}) -> int:
         with open(dag_file, "w") as outfile:
             outfile.write(output)
 
-    log(f"dag files COMPLETED SUCCESSFULLY", "IMPORTANT")
+    logger.info(f"dag files COMPLETED SUCCESSFULLY".center(100, '-'))
     return 0
 
 
@@ -163,7 +158,7 @@ def create_table_task(task: dict, properties: dict) -> dict:
         A dictionary containing expected parameters for the desired task (BigQueryOperator)
     """
 
-    log(f"STARTED", "INFO")
+    logger.info(f"{pop_stack()} - STARTED")
     dataset_staging = properties["dataset_staging"]
     dataset_publish = (
         "{dataset_publish}"
@@ -193,7 +188,7 @@ def create_table_task(task: dict, properties: dict) -> dict:
         "use_legacy_sql": False,
     }
 
-    log(f"COMPLETED SUCCESSFULLY", "INFO")
+    logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY")
     return outp
 
 
@@ -219,7 +214,7 @@ def create_sql(task: dict, dataset_staging: str = None) -> str:
     Returns:
       A string containing the SQL query to be executed by the task.
     """
-    log(f"STARTED", "INFO")
+    logger.info(f"{pop_stack()} - STARTED")
     sql = []
     target_dataset = (
         "{dataset_publish}"
@@ -232,10 +227,10 @@ def create_sql(task: dict, dataset_staging: str = None) -> str:
         else task["parameters"]["write_disposition"]
     )
 
-    log(f'creating sql for table type {task["parameters"]["target_type"]}', "INFO")
+    logger.info(f'{pop_stack()} - creating sql for table type {task["parameters"]["target_type"]}')
     if task["parameters"]["target_type"] == 1:
 
-        log(f'set write disposition - "{write_disposition}"', "INFO")
+        logger.info(f'{pop_stack()} - set write disposition - "{write_disposition}"')
         if write_disposition == "WRITE_TRUNCATE":
             sql.append(
                 f"truncate table {target_dataset}.{task['parameters']['destination_table']};"
@@ -261,10 +256,7 @@ def create_sql(task: dict, dataset_staging: str = None) -> str:
         td_table = re.sub(
             r"^[a-zA-Z]+_", "td_", task["parameters"]["destination_table"]
         )
-        log(
-            f'create sql for transient table, pull source data and previous columns - "{dataset_staging}.{td_table}_p1"',
-            "INFO",
-        )
+        logger.info(f'{pop_stack()} - create sql for transient table, pull source data and previous columns - "{dataset_staging}.{td_table}_p1"')
         sql.append(f"create or replace table {dataset_staging}.{td_table}_p1 as")
 
         r = create_sql_conditions(task)
@@ -275,7 +267,7 @@ def create_sql(task: dict, dataset_staging: str = None) -> str:
         select = create_sql_select(task, tables)
 
         history = task["parameters"]["history"]
-        log(f"setting history parameters", "INFO")
+        logger.info(f"{pop_stack()} - setting history parameters")
         partition_list = []
         for p in history["partition"]:
             source_name = (
@@ -306,7 +298,7 @@ def create_sql(task: dict, dataset_staging: str = None) -> str:
             )
         order = ",".join(order_list)
 
-        log(f"add previous fields for {history['driving_column']}", "INFO")
+        logger.info(f"{pop_stack()} - add previous fields for {history['driving_column']}")
         prev_task = {
             "parameters": {
                 "source_to_target": [],
@@ -348,10 +340,7 @@ def create_sql(task: dict, dataset_staging: str = None) -> str:
         sql.append("\n".join(where))
         sql.append(";\n")
 
-        log(
-            f'create sql for transient table, complete CDC - "{dataset_staging}.{td_table}_p2"',
-            "INFO",
-        )
+        logger.info(f'{pop_stack()} - create sql for transient table, complete CDC - "{dataset_staging}.{td_table}_p2"')
         sql.append(f"create or replace table {dataset_staging}.{td_table}_p2 as")
 
         select = f"select * except({','.join([t['name'] for t in prev_task['parameters']['source_to_target']])})"
@@ -365,15 +354,10 @@ def create_sql(task: dict, dataset_staging: str = None) -> str:
         sql.append("\n".join(where))
         sql.append(";\n")
 
-        log(
-            f'create sql for transient table, add/replace effective_to_dt with lead - "{dataset_staging}.{td_table}"',
-            "INFO",
-        )
+        logger.info(f'{pop_stack()} - create sql for transient table, add/replace effective_to_dt with lead - "{dataset_staging}.{td_table}"' )
 
-        log(
-            f'set write disposition - "{task["parameters"]["write_disposition"]}"',
-            "INFO",
-        )
+        logger.info(f'{pop_stack()} - set write disposition - "{task["parameters"]["write_disposition"]}"')
+
         if task["parameters"]["write_disposition"] == "WRITE_TRUNCATE":
             sql.append(
                 f"truncate table {target_dataset}.{task['parameters']['destination_table']};"
@@ -383,7 +367,7 @@ def create_sql(task: dict, dataset_staging: str = None) -> str:
             f"insert into {target_dataset}.{task['parameters']['destination_table']}"
         )
 
-        log(f"re-calculating history parameters", "INFO")
+        logger.info(f"{pop_stack()} - re-calculating history parameters")
         partition_list = []
         for p in history["partition"]:
             partition_list.append(f'{p["name"]}')
@@ -423,7 +407,7 @@ def create_sql(task: dict, dataset_staging: str = None) -> str:
         sql.append(";\n")
 
     outp = "\n".join(sql)
-    log(f"COMPLETED SUCCESSFULLY", "INFO")
+    logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY")
     return outp
 
 
@@ -443,9 +427,9 @@ def create_sql_select(task: dict, tables: dict) -> str:
         A string which can be used a the select part of the SQL query.
     """
 
-    log(f"STARTED", "INFO")
-    log(f"creating select list from", "INFO")
-    log(f"                     task - {task}", "INFO")
+    logger.info(f"{pop_stack()} - STARTED")
+    logger.debug(f'''{pop_stack()} - creating select list from
+                               task - {task}''')
     select = []
     # for each column in the source_to_target we identify the source table and column,
     # or where there is transformation use that in place of the source table and column,
@@ -482,7 +466,7 @@ def create_sql_select(task: dict, tables: dict) -> str:
 
         select.append(f"{prefix}{source}{alias}")
 
-    log(f"COMPLETED SUCCESSFULLY", "INFO")
+    logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY")
     return select
 
 
@@ -505,13 +489,13 @@ def create_sql_conditions(task: dict) -> dict:
             where: a string containing any where conditions
     """
 
-    log(f"STARTED", "INFO")
+    logger.info(f"{pop_stack()} - STARTED")
     tables = {task["parameters"]["driving_table"]: "a"}
     i = 1
     frm = [
         f"  from {task['parameters']['driving_table']} {tables[task['parameters']['driving_table']]}"
     ]
-    log(f"identifying join conditions", "INFO")
+    logger.info(f"{pop_stack()} - identifying join conditions")
     if "joins" in task["parameters"].keys():
         for join in task["parameters"]["joins"]:
             left_table = ""
@@ -557,7 +541,7 @@ def create_sql_conditions(task: dict) -> dict:
 
     outp = {"tables": tables, "from": frm, "where": where}
 
-    log(f"COMPLETED SUCCESSFULLY", "INFO")
+    logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY")
     return outp
 
 
@@ -573,10 +557,10 @@ def create_sql_where(conditions: list, tables: dict = {}) -> str:
     returns:
         A string which can be used a the where conditions of the SQL query.
     """
-    log(f"STARTED", "INFO")
-    log(f"creating where conditions:", "INFO")
-    log(f"               conditions  - {conditions}", "INFO")
-    log(f"               tables      - {tables}", "INFO")
+    logger.info(f"{pop_stack()} - STARTED")
+    logger.debug(f'''{pop_stack()} - creating where conditions:)
+                               conditions  - {conditions}
+                               tables      - {tables}''')
 
     where = []
     for i, condition in enumerate(conditions):
@@ -600,7 +584,7 @@ def create_sql_where(conditions: list, tables: dict = {}) -> str:
         right = f"{condition['fields'][1].replace(right_table,f'{tables[right_table] if right_table in tables.keys() else right_table}')}"
         where.append(f"{prefix}{left} {condition['operator']} {right}")
 
-    log(f"COMPLETED SUCCESSFULLY", "INFO")
+    logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY")
     return where
 
 
@@ -614,10 +598,9 @@ def create_task(task: dict) -> str:
     returns:
         A string of python code that can be added to the target file
     """
-    log(f"STARTED", "INFO")
-
-    log(f'creating task {task["task_id"]} from:', "INFO")
-    log(f'                           parameters - {task["parameters"]}', "INFO")
+    logger.info(f"{pop_stack()} - STARTED")
+    logger.debug(f'''{pop_stack()} - creating task {task["task_id"]} from:
+                               parameters - {task["parameters"]}''')
 
     outp = [f"{task['task_id']} = {task['operator']}(task_id='{task['task_id']}'"]
 
@@ -637,7 +620,7 @@ def create_task(task: dict) -> str:
         outp.append(f"{key} = {value}")
     outp.append("dag=dag)")
 
-    log(f"COMPLETED SUCCESSFULLY", "INFO")
+    logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY")
     return ",\n          ".join(outp)
 
 
@@ -655,7 +638,7 @@ def create_dag_string(name: str, dag: dict) -> str:
     Returns:
       A string of python code that can be added to the target file
     """
-    log(f"STARTED", "INFO")
+    logger.info(f"{pop_stack()} - STARTED")
     # we first set DAG defaults - these can also be excluded completely and
     # use Environment settings
     odag = {
@@ -687,7 +670,7 @@ def create_dag_string(name: str, dag: dict) -> str:
 
     outp = f"'{name}',{', '.join([f'{key} = {odag[key]}' for key in odag.keys()])}"
 
-    log(f"COMPLETED SUCCESSFULLY", "INFO")
+    logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY")
     return outp
 
 
@@ -702,7 +685,7 @@ def create_dag_args(args: dict) -> str:
     Returns:
       A string that is a dictionary of arguments for the DAG.
     """
-    log(f"STARTED", "INFO")
+    logger.info(f"{pop_stack()} - STARTED")
     oargs = {
         "depends_on_past": False,
         "email_on_failure": False,
@@ -749,7 +732,7 @@ def create_dag_args(args: dict) -> str:
     )
     outp = f"{{{outstr}}}"
 
-    log(f"COMPLETED SUCCESSFULLY", "INFO")
+    logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY")
     return outp
 
 
@@ -765,22 +748,22 @@ def get_config(path: str) -> dict:
       A dictionary object
     """
 
-    log(f"STARTED", "INFO")
+    logger.info(f"{pop_stack()} - STARTED")
     if not path:
-        log(f"File {path:} does not exist.", "WARNING")
-        return
+        logger.warning(f"{pop_stack()} - File {path:} does not exist.")
+        return {}
 
     try:
         # identify what path is; dir, file
         if os.path.isdir(path) or not os.path.exists(path):
             raise FileExistsError
     except (FileNotFoundError, FileExistsError) as e:
-        log(f"File {path:} does not exist.", "ERROR")
-        log(f"FAILED", "INFO")
+        logger.error(f"{pop_stack()} - File {path:} does not exist.")
+        logger.info(f"{pop_stack()} - FAILED")
         return
     except:
-        log(f"{sys.exc_info()[0]:}", "ERROR")
-        log(f"FAILED", "INFO")
+        logger.error(f"{sys.exc_info()[0]:}")
+        logger.info(f"{pop_stack()} - FAILED")
         return
 
     # read file
@@ -789,52 +772,24 @@ def get_config(path: str) -> dict:
             filecontent = sourcefile.read()
 
         # return file
-        log(f"COMPLETED SUCCESSFULLY", "INFO")
+        logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY")
         return json.loads(filecontent)
     except:
-        log(f"{sys.exc_info()[0]:}", "ERROR")
-        log(f"FAILED", "INFO")
+        logger.error(f"{pop_stack()} - {sys.exc_info()[0]:}")
+        logger.info(f"{pop_stack()} - FAILED")
         return
 
-
-def log(message: str, type: str = "INFO") -> None:
+def pop_stack() -> str:
     """
-    It takes a message and a type, and prints the message to the console and to a log file if the type
-    is equal to the logging mode or if the logging mode is DEBUG and the type is INFO, WARNING, or ERROR
-
-    Args:
-      message (str): The message to be logged.
-      type (str): str = "INFO". Defaults to INFO
-
+    It returns the name of the file and function that called it
+    
     Returns:
-      None
+      The name of the file and the function that called the function.
     """
     frame = inspect.stack()[1]
     module = inspect.getmodule(frame[0])
     filename = module.__file__
-    if type == "IMPORTANT":
-        log_prefix = "****************************************************************************************************\n"
-        log_sufix = "\n****************************************************************************************************"
-        type = "INFO"
-    else:
-        log_prefix = ""
-        log_sufix = ""
-
-    log_message = f"{log_prefix}{datetime.now():%Y-%m-%d %H:%M:%S} {type}: {os.path.basename(filename).ljust(20)} {frame[3].ljust(20)} {message}{log_sufix}"
-
-    if (
-        (LOGGING_MODE == "DEBUG" and type in ["INFO", "WARNING", "ERROR"])
-        or (LOGGING_MODE == "WARNING" and type in ["WARNING", "ERROR"])
-        or LOGGING_MODE == type
-    ):
-        if type == "ERROR" or LOGGING_VERBOSE:
-            print(log_message)
-        if not os.path.exists("./logs/"):
-            os.makedirs("./logs/")
-        f = open(f"./logs/{os.path.basename(filename)}.log", "a")
-        f.write(f"{log_message}\n")
-
-    return
+    return f'file: {os.path.basename(filename)} - method: {frame[3]}'
 
 
 def parse_args(args: list) -> dict:
@@ -870,11 +825,14 @@ def parse_args(args: list) -> dict:
 
 if __name__ == "__main__":
     args = parse_args(sys.argv)
-    LOGGING_VERBOSE = False if not "--verbose" in args.keys() else True
-    LOGGING_MODE = "DEBUG" if not "--log" in args.keys() else args["--log"]
+    
+    log_file_name = f'./logs/builddags_{datetime.now().strftime("%Y-%m-%dT%H%M%S")}.log'
+    logger = ILogger('builddags',log_file_name,'DEBUG')
+
+
     try:
-        main(args)
+        main(logger, args)
     except:
-        log(f"{traceback.format_exc():}", "ERROR")
-        log(f"{sys.exc_info()[1]:}", "ERROR")
-        log(f"dag files FAILED", "IMPORTANT")
+        logger.error(f"{traceback.format_exc():}")
+        logger.debug(f"{sys.exc_info()[1]:}")
+        logger.info(f"dag files FAILED".center(100,'-'))
