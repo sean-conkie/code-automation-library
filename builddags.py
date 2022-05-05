@@ -1,3 +1,4 @@
+import argparse
 import inspect
 import json
 import os
@@ -10,7 +11,7 @@ from jinja2 import Environment, FileSystemLoader
 from logger import ILogger
 
 
-def main(logger: ILogger, args: dict = {}) -> int:
+def main(logger: ILogger, args: argparse.Namespace) -> int:
     """Main method for generating .py files containing DAGs from config files.
 
     From JSON config file(s) supplied as a dir or file, generate a .py file
@@ -30,12 +31,8 @@ def main(logger: ILogger, args: dict = {}) -> int:
     """
 
     logger.info(f"dag files STARTED".center(100, "-"))
-    dpath = (
-        "./cfg/dag/" if "--dir" not in args.keys() else args["--dir"]
-    )  # set directory path to default if none provided
-    opath = (
-        "./dags/" if "--out-dir" not in args.keys() else args["--out-dir"]
-    )  # set output path to default if none provided
+    dpath = args.config_directory
+    opath = args.output_directory
     config_list = []
 
     # create a list of config files using the source directory (dpath), if the
@@ -59,11 +56,11 @@ def main(logger: ILogger, args: dict = {}) -> int:
     # the python statements needed to be inserted into the template
     for config in config_list:
         path = config if os.path.exists(config) else f"{dpath}{config}"
-        cfg = get_config(path)
+        cfg = get_config(logger, path)
         logger.info(f"{pop_stack()} - building dag - {cfg['name']}")
 
-        dag_string = create_dag_string(cfg["name"], cfg["dag"])
-        default_args = create_dag_args(cfg["args"])
+        dag_string = create_dag_string(logger, cfg["name"], cfg["dag"])
+        default_args = create_dag_args(logger, cfg["args"])
         imports = "\n".join(cfg["imports"])
         tasks = []
         dependencies = []
@@ -73,10 +70,10 @@ def main(logger: ILogger, args: dict = {}) -> int:
         for task in cfg["tasks"]:
             logger.info(f'{pop_stack()} - creating task "{task["task_id"]}"')
             if task["operator"] == "CreateTable":
-                task["parameters"] = create_table_task(task, cfg["properties"])
+                task["parameters"] = create_table_task(logger, task, cfg["properties"])
                 task["operator"] = "BigQueryOperator"
 
-            tasks.append(create_task(task))
+            tasks.append(create_task(logger, task))
 
             if "dependencies" in task.keys():
                 if len(task["dependencies"]) > 0:
@@ -101,7 +98,7 @@ def main(logger: ILogger, args: dict = {}) -> int:
                                         "mode": "reschedule",
                                     },
                                 }
-                                tasks.append(create_task(ext_task))
+                                tasks.append(create_task(logger, ext_task))
                                 dependencies.append(f"start_pipeline >> {dep_task}")
                         else:
                             dep_task = dep
@@ -143,7 +140,7 @@ def main(logger: ILogger, args: dict = {}) -> int:
     return 0
 
 
-def create_table_task(task: dict, properties: dict) -> dict:
+def create_table_task(logger: ILogger, task: dict, properties: dict) -> dict:
     """Method for generating parameters dictionary for standard create table sql.
 
     Uses the task object to populate the required parameters for the BigQueryOperator.
@@ -171,7 +168,7 @@ def create_table_task(task: dict, properties: dict) -> dict:
     sql = (
         task["parameters"]["sql"]
         if "sql" in task["parameters"].keys()
-        else f"{create_sql(task, dataset_staging)}"
+        else f"{create_sql(logger, task, dataset_staging)}"
     )  # if user has provided a link to a .sql file, use it otherwise look to create sql from source to target parameter
     write_disposition = (
         "WRITE_TRUNCATE"
@@ -192,7 +189,7 @@ def create_table_task(task: dict, properties: dict) -> dict:
     return outp
 
 
-def create_sql(task: dict, dataset_staging: str = None) -> str:
+def create_sql(logger: ILogger, task: dict, dataset_staging: str = None) -> str:
     """Method for generating a SQL query to be executed by the task.
 
     This method uses the details supplied in the config to create a string containing
@@ -242,12 +239,12 @@ def create_sql(task: dict, dataset_staging: str = None) -> str:
             f"insert into {target_dataset}.{task['parameters']['destination_table']}"
         )
 
-        r = create_sql_conditions(task)
+        r = create_sql_conditions(logger, task)
         tables = r["tables"]
         frm = r["from"]
         where = r["where"]
 
-        select = create_sql_select(task, tables)
+        select = create_sql_select(logger, task, tables)
 
         sql.append(",\n".join(select))
         sql.append("\n".join(frm))
@@ -263,12 +260,12 @@ def create_sql(task: dict, dataset_staging: str = None) -> str:
         )
         sql.append(f"create or replace table {dataset_staging}.{td_table}_p1 as")
 
-        r = create_sql_conditions(task)
+        r = create_sql_conditions(logger, task)
         tables = r["tables"]
         frm = r["from"]
         where = r["where"]
 
-        select = create_sql_select(task, tables)
+        select = create_sql_select(logger, task, tables)
 
         history = task["parameters"]["history"]
         logger.info(f"{pop_stack()} - setting history parameters")
@@ -336,7 +333,7 @@ def create_sql(task: dict, dataset_staging: str = None) -> str:
                 }
             )
 
-        prev_select = create_sql_select(prev_task, tables)
+        prev_select = create_sql_select(logger, prev_task, tables)
         prev_select[0] = prev_select[0].replace("select", "      ")
         for ps in prev_select:
             select.append(ps)
@@ -355,7 +352,7 @@ def create_sql(task: dict, dataset_staging: str = None) -> str:
         tables[f"{dataset_staging}.{td_table}_p1"] = chr(len(tables.keys()) + 97)
         frm = f"  from {dataset_staging}.{td_table}_p1 {tables[f'{dataset_staging}.{td_table}_p1']}"
 
-        where = create_sql_where(prev_conditions)
+        where = create_sql_where(logger, prev_conditions)
 
         sql.append(select)
         sql.append(frm)
@@ -411,7 +408,7 @@ def create_sql(task: dict, dataset_staging: str = None) -> str:
             new_source_to_target["parameters"]["source_to_target"].append(ns)
 
         tables[f"{dataset_staging}.{td_table}_p2"] = chr(len(tables.keys()) + 97)
-        select = create_sql_select(new_source_to_target, tables)
+        select = create_sql_select(logger, new_source_to_target, tables)
         frm = f"  from {dataset_staging}.{td_table}_p2 {tables[f'{dataset_staging}.{td_table}_p2']}"
 
         sql.append(",\n".join(select))
@@ -423,7 +420,7 @@ def create_sql(task: dict, dataset_staging: str = None) -> str:
     return outp
 
 
-def create_sql_select(task: dict, tables: dict) -> str:
+def create_sql_select(logger: ILogger, task: dict, tables: dict) -> str:
     """Method for generating the select part of the SQL query.
 
     Uses the columns supplied in the source_to_target array to create the select statement,
@@ -484,7 +481,7 @@ def create_sql_select(task: dict, tables: dict) -> str:
     return select
 
 
-def create_sql_conditions(task: dict) -> dict:
+def create_sql_conditions(logger: ILogger, task: dict) -> dict:
     """Method for generating the conditions for the SQL query.
 
     This method uses the details supplied in the config to identify all tables used,
@@ -548,7 +545,7 @@ def create_sql_conditions(task: dict) -> dict:
         right_table = ""
 
     where = (
-        create_sql_where(task["parameters"]["where"], tables)
+        create_sql_where(logger, task["parameters"]["where"], tables)
         if "where" in task["parameters"].keys()
         else ""
     )
@@ -559,7 +556,7 @@ def create_sql_conditions(task: dict) -> dict:
     return outp
 
 
-def create_sql_where(conditions: list, tables: dict = {}) -> str:
+def create_sql_where(logger: ILogger, conditions: list, tables: dict = {}) -> str:
     """Method for generating the where conditions of the SQL query.
 
     Uses the wehere object of the task to create the string.
@@ -604,7 +601,7 @@ def create_sql_where(conditions: list, tables: dict = {}) -> str:
     return where
 
 
-def create_task(task: dict) -> str:
+def create_task(logger: ILogger, task: dict) -> str:
     """Method for generating a string of python that defines a task.
 
     args:
@@ -642,7 +639,7 @@ def create_task(task: dict) -> str:
     return ",\n          ".join(outp)
 
 
-def create_dag_string(name: str, dag: dict) -> str:
+def create_dag_string(logger: ILogger, name: str, dag: dict) -> str:
     """Method for generating a string of python that defines a dag.
 
     DAG parameters are provided and used to populate a string which can be
@@ -692,7 +689,7 @@ def create_dag_string(name: str, dag: dict) -> str:
     return outp
 
 
-def create_dag_args(args: dict) -> str:
+def create_dag_args(logger: ILogger, args: dict) -> str:
     """
     > This function takes a dictionary of arguments and returns a string that can be used to create a
     DAG in Airflow
@@ -754,7 +751,7 @@ def create_dag_args(args: dict) -> str:
     return outp
 
 
-def get_config(path: str) -> dict:
+def get_config(logger: ILogger, path: str) -> dict:
     """
     This function takes a path to a config file and returns a
     dictionary object
@@ -811,45 +808,37 @@ def pop_stack() -> str:
     return f"file: {os.path.basename(filename)} - method: {frame[3]}"
 
 
-def parse_args(args: list) -> dict:
-    """
-    It takes a list of arguments and returns a dictionary of arguments
-
-    Args:
-      args (list): list
-
-    Returns:
-      A dictionary with the arguments as keys and the values as values.
-    """
-    arg_dict = {}
-    arg_name = None
-    position = -1
-
-    for arg in args:
-        ls = arg.split(",")
-        if arg_name == None:
-            position += 1
-        if ls[0].lstrip().rstrip().startswith("-"):
-            arg_name = ls[0]
-            arg_dict[arg_name] = None
-        else:
-            if arg_name:
-                arg_dict[arg_name] = ls
-                arg_name = None
-            else:
-                arg_dict[position] = ls
-
-    return arg_dict
-
-
 if __name__ == "__main__":
-    args = parse_args(sys.argv)
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--config_directory",
+        required=False,
+        dest="config_directory",
+        default="./cfg/dag/",
+        help="Specify the location of the config file(s) which define the required DAGs. (default: ./cfg)",
+    )
+    parser.add_argument(
+        "--destination",
+        required=False,
+        dest="output_directory",
+        default="./dags/",
+        help="Specify the desired output directory for DAGs created. (default: ./dags)",
+    )
+    parser.add_argument(
+        "--log_level",
+        required=False,
+        dest="level",
+        default="DEBUG",
+        help="Specify the desired log level (default: DEBUG).  This can be one of the following: 'CRITICAL', 'DEBUG', 'ERROR', 'FATAL','INFO','NOTSET', 'WARNING'",
+    )
+
+    known_args, args = parser.parse_known_args()
 
     log_file_name = f'./logs/builddags_{datetime.now().strftime("%Y-%m-%dT%H%M%S")}.log'
-    logger = ILogger("builddags", log_file_name, "DEBUG")
+    logger = ILogger("builddags", log_file_name, known_args.level)
 
     try:
-        main(logger, args)
+        main(logger, known_args)
     except:
         logger.error(f"{traceback.format_exc():}")
         logger.debug(f"{sys.exc_info()[1]:}")
