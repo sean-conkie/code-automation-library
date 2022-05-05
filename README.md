@@ -8,6 +8,8 @@ Cloud Composer API Service Agent
 Cloud Composer v2 API Service Agent Extension
 Composer Worker
 Service Account User
+BigQuery Editor
+BigQuery Job User
 
 ### Users
 #### Editor
