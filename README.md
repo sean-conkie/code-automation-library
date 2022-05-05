@@ -1,6 +1,25 @@
 # sconkie-cloud-composer
 A data pipeline using Cloud Composer and other GCP tools.
 
+## IAM
+The following roles are required in GCP to allow Cloud Composer build and run.
+### Service Account
+Cloud Composer API Service Agent
+Cloud Composer v2 API Service Agent Extension
+Composer Worker
+Service Account User
+
+### Users
+#### Editor
+Service Account User
+Composer Administrator
+Environment and Storage Object Administrator
+
+#### Viewer
+Composer User
+Environment and Storage Object Viewer
+
+
 ## Resources
 ### Airflow
 [Airflow Scaling Workers](https://www.astronomer.io/guides/airflow-scaling-workers/) - key settings that you should consider modifying as you scale up your data pipelines.
