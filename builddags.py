@@ -16,7 +16,7 @@ LOGGING_VERBOSE = True
 
 
 def main(args: dict = {}) -> int:
-    """    Main method for generating .py files containing DAGs from config files.
+    """Main method for generating .py files containing DAGs from config files.
 
     From JSON config file(s) supplied as a dir or file, generate a .py file
     using template_dag.txt.  Loops through all configs provided and creates
@@ -215,7 +215,7 @@ def create_sql(task: dict, dataset_staging: str = None) -> str:
       task (dict): A dictionary of representing a task to be added to the DAG.  Used to create a task
     parameter string
       dataset_staging (str): The name of the staging dataset.
-    
+
     Returns:
       A string containing the SQL query to be executed by the task.
     """
@@ -647,7 +647,7 @@ def create_dag_string(name: str, dag: dict) -> str:
     DAG parameters are provided and used to populate a string which can be
     added to the target file.
 
-    
+
     Args:
       name (str): The name of the DAG.
       dag (dict): A dictionary representing the DAG.  Used to create dag string
@@ -695,10 +695,10 @@ def create_dag_args(args: dict) -> str:
     """
     > This function takes a dictionary of arguments and returns a string that can be used to create a
     DAG in Airflow
-    
+
     Args:
       args (dict): dict = {
-    
+
     Returns:
       A string that is a dictionary of arguments for the DAG.
     """
@@ -753,14 +753,14 @@ def create_dag_args(args: dict) -> str:
     return outp
 
 
-def get_config(path:str) -> dict:
+def get_config(path: str) -> dict:
     """
-    This function takes a path to a config file and returns a 
+    This function takes a path to a config file and returns a
     dictionary object
-    
+
     Args:
       path: The path to the config file you want to read.
-    
+
     Returns:
       A dictionary object
     """
@@ -801,11 +801,11 @@ def log(message: str, type: str = "INFO") -> None:
     """
     It takes a message and a type, and prints the message to the console and to a log file if the type
     is equal to the logging mode or if the logging mode is DEBUG and the type is INFO, WARNING, or ERROR
-    
+
     Args:
       message (str): The message to be logged.
       type (str): str = "INFO". Defaults to INFO
-    
+
     Returns:
       None
     """
@@ -840,10 +840,10 @@ def log(message: str, type: str = "INFO") -> None:
 def parse_args(args: list) -> dict:
     """
     It takes a list of arguments and returns a dictionary of arguments
-    
+
     Args:
       args (list): list
-    
+
     Returns:
       A dictionary with the arguments as keys and the values as values.
     """
