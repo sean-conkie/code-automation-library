@@ -438,10 +438,10 @@ insert into"""
         wtask["parameters"]["source_to_target"].append(analytic_transformation)
 
     select = create_sql_select(logger, wtask, tables)
-    query_list = [',\n'.join(select), "\n".join(frm), "\n".join(where), ";\n"]
+    query_list = [",\n".join(select), "\n".join(frm), "\n".join(where), ";\n"]
 
     sql.append("\n".join(query_list))
-    outp = '\n'.join(query_list)
+    outp = "\n".join(query_list)
     logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100, "-"))
     return outp
 
