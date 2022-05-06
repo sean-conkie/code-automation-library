@@ -1,0 +1,31 @@
+--------------------------------------------------------------------------------
+--
+-- Filename      : {{task_id}}.sql
+-- Author        : Cloud Composer
+-- Date Created  : {{ created_date }}
+--
+--------------------------------------------------------------------------------
+--
+-- Description   : SQL file auto-generated for {{ task_id }}
+--
+-- Comments      : NA
+--
+-- Usage         : Standard BQSQL Call
+--
+-- Called By     : {{task_id}}
+--
+-- Calls         : none.
+--
+-- Parameters    : 1) lower_date_bound - DD-MON-YYYY HH24:MI:SS
+--                 2) upper_date_bound - DD-MON-YYYY HH24:MI:SS
+--
+-- Exit codes    : 0 - Success
+--                 1 - Failure
+--
+-- Revisions
+-- =============================================================================
+-- Date     userid  MR#       Comments                                      Ver.
+-- ------   ------  ------    --------------------------------------------  ----
+--------------------------------------------------------------------------------
+
+{{ sql }}

@@ -1,36 +1,45 @@
-
 from airflow import DAG
 from airflow.contrib.operators.bigquery_operator import BigQueryOperator
 from airflow.operators.dummy_operator import DummyOperator
+from airflow.sensors.external_task import ExternalTaskSensor
 from datetime import datetime, timedelta
-from airflow.contrib.operators.bigquery_check_operator import BigQueryCheckOperator
 
 
-
-dataset_staging = 'uk_pre_customer_spine_offer_is'
-dataset_publish = 'uk_pub_customer_spine_offer_is'
-
-
-default_args = {'owner': 'customerbtprod','email': ['sean.conkie@sky.uk'],'depends_on_past': False,'email_on_failure': False,'email_on_retry': False,'retries': '5','retry_delay': timedelta(seconds=60),'priority_weight': '10','wait_for_downstream': False,'sla': timedelta(seconds=7200),'execution_timeout': timedelta(seconds=300)}
-
-with DAG('GCP_SPINE_OFFER',
-          concurrency=5,
-          max_active_runs=1,
-          default_args=default_args,
-          schedule_interval=None,
-          start_date=datetime.now(),
-          description='Populates portfolio offer tables uk_pub_customer_spine_offer_is',
-          catchup=False,
-          tags=['offer', 'customer']) as dag:
+dataset_staging = "uk_pre_customer_spine_offer_is"
+dataset_publish = "uk_pub_customer_spine_offer_is"
 
 
-    start_pipeline = DummyOperator(
-        task_id = 'start_pipeline',
-        dag = dag
-    )
+default_args = {
+    "depends_on_past": False,
+    "email_on_failure": False,
+    "email_on_retry": False,
+    "retries": 5,
+    "retry_delay": timedelta(seconds=60),
+    "priority_weight": 10,
+    "wait_for_downstream": False,
+    "sla": timedelta(seconds=7200),
+    "execution_timeout": timedelta(seconds=300),
+    "owner": "customerbtprod",
+    "email": ["sean.conkie@sky.uk"],
+}
 
-    dim_offer_type = BigQueryOperator(task_id='dim_offer_type',
-          sql = f'''truncate table {dataset_publish}.dim_offer_type;
+with DAG(
+    "GCP_SPINE_OFFER",
+    concurrency=10,
+    max_active_runs=1,
+    default_args=default_args,
+    schedule_interval=None,
+    start_date=datetime.now(),
+    catchup=False,
+    description="Populates portfolio offer tables uk_pub_customer_spine_offer_is",
+    tags=["offer", "customer"],
+) as dag:
+
+    start_pipeline = DummyOperator(task_id="start_pipeline", dag=dag)
+
+    dim_offer_type = BigQueryOperator(
+        task_id="dim_offer_type",
+        sql=f"""truncate table {dataset_publish}.dim_offer_type;
 insert into {dataset_publish}.dim_offer_type
 select a.id,
        current_timestamp()                                 dw_last_modified_dt,
@@ -47,17 +56,20 @@ select a.id,
   left join uk_tds_refdata_eod_is.cc_refdata_bsboffertype b
     on (    a.offertypeid = b.id
         and b.rdmaction <> 'D')
- where a.offertypeid <> 'D'
+ where a.rdmaction <> 'D'
 ;
-''',
-          destination_dataset_table = f'''{dataset_publish}.dim_offer_type''',
-          create_disposition = f'''CREATE_IF_NEEDED''',
-          allow_large_results = True,
-          use_legacy_sql = False,
-          dag=dag)
+""",
+        destination_dataset_table=f"""{dataset_publish}.dim_offer_type""",
+        write_disposition=f"""WRITE_TRUNCATE""",
+        create_disposition=f"""CREATE_IF_NEEDED""",
+        allow_large_results=True,
+        use_legacy_sql=False,
+        dag=dag,
+    )
 
-    td_offer_status_core = BigQueryOperator(task_id='td_offer_status_core',
-          sql = f'''create or replace table uk_pre_customer_spine_offer_is.td_offer_status_core_p1 as
+    td_offer_status_core = BigQueryOperator(
+        task_id="td_offer_status_core",
+        sql=f"""create or replace table uk_pre_customer_spine_offer_is.td_offer_status_core_p1 as
 select a.id                                                portfolio_offer_id,
        current_timestamp()                                 dw_last_modified_dt,
        ifnull(a.statuschangeddate,a.effective_from_dt)     effective_from_dt,
@@ -98,15 +110,18 @@ select d.portfolio_offer_id,
        d.reason
   from uk_pre_customer_spine_offer_is.td_offer_status_core_p2 d
 ;
-''',
-          destination_dataset_table = f'''uk_pre_customer_spine_offer_is.td_offer_status_core''',
-          create_disposition = f'''CREATE_IF_NEEDED''',
-          allow_large_results = True,
-          use_legacy_sql = False,
-          dag=dag)
+""",
+        destination_dataset_table=f"""uk_pre_customer_spine_offer_is.td_offer_status_core""",
+        write_disposition=f"""WRITE_TRUNCATE""",
+        create_disposition=f"""CREATE_IF_NEEDED""",
+        allow_large_results=True,
+        use_legacy_sql=False,
+        dag=dag,
+    )
 
-    td_offer_priceable_unit_core = BigQueryOperator(task_id='td_offer_priceable_unit_core',
-          sql = f'''truncate table uk_pre_customer_spine_offer_is.td_offer_priceable_unit_core;
+    td_offer_priceable_unit_core = BigQueryOperator(
+        task_id="td_offer_priceable_unit_core",
+        sql=f"""truncate table uk_pre_customer_spine_offer_is.td_offer_priceable_unit_core;
 insert into uk_pre_customer_spine_offer_is.td_offer_priceable_unit_core
 select a.id,
        current_timestamp()                                 dw_last_modified_dt,
@@ -122,31 +137,40 @@ select a.id,
   from uk_tds_chordiant_eod_is.cc_chordiant_bsbpriceableunit a
  where a.logically_deleted = 0
 ;
-''',
-          destination_dataset_table = f'''uk_pre_customer_spine_offer_is.td_offer_priceable_unit_core''',
-          create_disposition = f'''CREATE_IF_NEEDED''',
-          allow_large_results = True,
-          use_legacy_sql = False,
-          dag=dag)
+""",
+        destination_dataset_table=f"""uk_pre_customer_spine_offer_is.td_offer_priceable_unit_core""",
+        write_disposition=f"""WRITE_TRUNCATE""",
+        create_disposition=f"""CREATE_IF_NEEDED""",
+        allow_large_results=True,
+        use_legacy_sql=False,
+        dag=dag,
+    )
 
-    td_offer_priceable_unit_soip = BigQueryOperator(task_id='td_offer_priceable_unit_soip',
-          sql = f'''sql/spine_offer_td_offer_priceable_unit_soip.sql''',
-          destination_dataset_table = f'''uk_pre_customer_spine_offer_is.td_offer_priceable_unit_soip''',
-          create_disposition = f'''CREATE_IF_NEEDED''',
-          allow_large_results = True,
-          use_legacy_sql = False,
-          dag=dag)
+    td_offer_priceable_unit_soip = BigQueryOperator(
+        task_id="td_offer_priceable_unit_soip",
+        sql=f"""sql/spine_offer_td_offer_priceable_unit_soip.sql""",
+        destination_dataset_table=f"""uk_pre_customer_spine_offer_is.td_offer_priceable_unit_soip""",
+        write_disposition=f"""WRITE_TRUNCATE""",
+        create_disposition=f"""CREATE_IF_NEEDED""",
+        allow_large_results=True,
+        use_legacy_sql=False,
+        dag=dag,
+    )
 
-    truncate_dim_offer_priceable_unit = BigQueryOperator(task_id='truncate_dim_offer_priceable_unit',
-          sql = f'''truncate table uk_pub_customer_spine_offer_is.dim_offer_priceable_unit;''',
-          destination_dataset_table = f'''{dataset_publish}.dim_offer_priceable_unit''',
-          create_disposition = f'''CREATE_IF_NEEDED''',
-          allow_large_results = True,
-          use_legacy_sql = False,
-          dag=dag)
+    truncate_dim_offer_priceable_unit = BigQueryOperator(
+        task_id="truncate_dim_offer_priceable_unit",
+        sql=f"""truncate table uk_pub_customer_spine_offer_is.dim_offer_priceable_unit;""",
+        destination_dataset_table=f"""{dataset_publish}.dim_offer_priceable_unit""",
+        write_disposition=f"""WRITE_TRUNCATE""",
+        create_disposition=f"""CREATE_IF_NEEDED""",
+        allow_large_results=True,
+        use_legacy_sql=False,
+        dag=dag,
+    )
 
-    dim_offer_priceable_unit_core = BigQueryOperator(task_id='dim_offer_priceable_unit_core',
-          sql = f'''insert into {dataset_publish}.dim_offer_priceable_unit
+    dim_offer_priceable_unit_core = BigQueryOperator(
+        task_id="dim_offer_priceable_unit_core",
+        sql=f"""insert into {dataset_publish}.dim_offer_priceable_unit
 select a.id,
        a.dw_last_modified_dt,
        a.created_dt,
@@ -161,15 +185,18 @@ select a.id,
   from uk_pre_customer_spine_offer_is.td_offer_priceable_unit_core a
 
 ;
-''',
-          destination_dataset_table = f'''{dataset_publish}.dim_offer_priceable_unit''',
-          create_disposition = f'''CREATE_IF_NEEDED''',
-          allow_large_results = True,
-          use_legacy_sql = False,
-          dag=dag)
+""",
+        destination_dataset_table=f"""{dataset_publish}.dim_offer_priceable_unit""",
+        write_disposition=f"""WRITE_APPEND""",
+        create_disposition=f"""CREATE_IF_NEEDED""",
+        allow_large_results=True,
+        use_legacy_sql=False,
+        dag=dag,
+    )
 
-    dim_offer_priceable_unit_soip = BigQueryOperator(task_id='dim_offer_priceable_unit_soip',
-          sql = f'''insert into {dataset_publish}.dim_offer_priceable_unit
+    dim_offer_priceable_unit_soip = BigQueryOperator(
+        task_id="dim_offer_priceable_unit_soip",
+        sql=f"""insert into {dataset_publish}.dim_offer_priceable_unit
 select a.id,
        a.dw_last_modified_dt,
        a.created_dt,
@@ -184,74 +211,95 @@ select a.id,
   from uk_pre_customer_spine_offer_is.td_offer_priceable_unit_soip a
 
 ;
-''',
-          destination_dataset_table = f'''{dataset_publish}.dim_offer_priceable_unit''',
-          create_disposition = f'''CREATE_IF_NEEDED''',
-          allow_large_results = True,
-          use_legacy_sql = False,
-          dag=dag)
-
-    td_offer_discount_core_pt1 = BigQueryOperator(task_id='td_offer_discount_core_pt1',
-          sql = f'''sql/spine_offer_td_offer_discount_1.sql''',
-          destination_dataset_table = f'''''',
-          write_disposition = f'''WRITE_TRUNCATE''',
-          create_disposition = f'''CREATE_IF_NEEDED''',
-          allow_large_results = True,
-          use_legacy_sql = False,
-          dag=dag)
-
-    td_offer_discount_core_pt2 = BigQueryOperator(task_id='td_offer_discount_core_pt2',
-          sql = f'''sql/spine_offer_td_offer_discount_2.sql''',
-          destination_dataset_table = f'''''',
-          write_disposition = f'''WRITE_TRUNCATE''',
-          create_disposition = f'''CREATE_IF_NEEDED''',
-          allow_large_results = True,
-          use_legacy_sql = False,
-          dag=dag)
-
-    td_offer_discount_soip = BigQueryOperator(task_id='td_offer_discount_soip',
-          sql = f'''sql/spine_offer_td_offer_discount_soip.sql''',
-          destination_dataset_table = f'''''',
-          write_disposition = f'''WRITE_TRUNCATE''',
-          create_disposition = f'''CREATE_IF_NEEDED''',
-          allow_large_results = True,
-          use_legacy_sql = False,
-          dag=dag)
-
-    dim_offer_discount = BigQueryOperator(task_id='dim_offer_discount',
-          sql = f'''sql/spine_offer_dim_offer_discount.sql''',
-          destination_dataset_table = f'''''',
-          write_disposition = f'''WRITE_TRUNCATE''',
-          create_disposition = f'''CREATE_IF_NEEDED''',
-          allow_large_results = True,
-          use_legacy_sql = False,
-          dag=dag)
-
-    td_offer_status_soip = BigQueryOperator(task_id='td_offer_status_soip',
-          sql = f'''sql/spine_offer_td_offer_status_soip.sql''',
-          destination_dataset_table = f'''''',
-          write_disposition = f'''WRITE_TRUNCATE''',
-          create_disposition = f'''CREATE_IF_NEEDED''',
-          allow_large_results = True,
-          use_legacy_sql = False,
-          dag=dag)
-
-    dim_offer_status = BigQueryOperator(task_id='dim_offer_status',
-          sql = f'''sql/spine_offer_dim_offer_status.sql''',
-          destination_dataset_table = f'''''',
-          write_disposition = f'''WRITE_TRUNCATE''',
-          create_disposition = f'''CREATE_IF_NEEDED''',
-          allow_large_results = True,
-          use_legacy_sql = False,
-          dag=dag)
-
-    
-
-    finish_pipeline = DummyOperator(
-        task_id = 'finish_pipeline'
+""",
+        destination_dataset_table=f"""{dataset_publish}.dim_offer_priceable_unit""",
+        write_disposition=f"""WRITE_APPEND""",
+        create_disposition=f"""CREATE_IF_NEEDED""",
+        allow_large_results=True,
+        use_legacy_sql=False,
+        dag=dag,
     )
 
-  # Define task dependencies
+    td_offer_discount_core_pt1 = BigQueryOperator(
+        task_id="td_offer_discount_core_pt1",
+        sql=f"""sql/spine_offer_td_offer_discount_1.sql""",
+        destination_dataset_table=f"""""",
+        write_disposition=f"""WRITE_TRUNCATE""",
+        create_disposition=f"""CREATE_IF_NEEDED""",
+        allow_large_results=True,
+        use_legacy_sql=False,
+        dag=dag,
+    )
+
+    td_offer_discount_core_pt2 = BigQueryOperator(
+        task_id="td_offer_discount_core_pt2",
+        sql=f"""sql/spine_offer_td_offer_discount_2.sql""",
+        destination_dataset_table=f"""""",
+        write_disposition=f"""WRITE_TRUNCATE""",
+        create_disposition=f"""CREATE_IF_NEEDED""",
+        allow_large_results=True,
+        use_legacy_sql=False,
+        dag=dag,
+    )
+
+    td_offer_discount_soip = BigQueryOperator(
+        task_id="td_offer_discount_soip",
+        sql=f"""sql/spine_offer_td_offer_discount_soip.sql""",
+        destination_dataset_table=f"""""",
+        write_disposition=f"""WRITE_TRUNCATE""",
+        create_disposition=f"""CREATE_IF_NEEDED""",
+        allow_large_results=True,
+        use_legacy_sql=False,
+        dag=dag,
+    )
+
+    dim_offer_discount = BigQueryOperator(
+        task_id="dim_offer_discount",
+        sql=f"""sql/spine_offer_dim_offer_discount.sql""",
+        destination_dataset_table=f"""""",
+        write_disposition=f"""WRITE_TRUNCATE""",
+        create_disposition=f"""CREATE_IF_NEEDED""",
+        allow_large_results=True,
+        use_legacy_sql=False,
+        dag=dag,
+    )
+
+    td_offer_status_soip = BigQueryOperator(
+        task_id="td_offer_status_soip",
+        sql=f"""sql/spine_offer_td_offer_status_soip.sql""",
+        destination_dataset_table=f"""""",
+        write_disposition=f"""WRITE_TRUNCATE""",
+        create_disposition=f"""CREATE_IF_NEEDED""",
+        allow_large_results=True,
+        use_legacy_sql=False,
+        dag=dag,
+    )
+
+    ext_task_one = ExternalTaskSensor(
+        task_id="ext_task_one",
+        external_dag_id=f"""another_dag""",
+        external_task_id=f"""task_one""",
+        check_existence=True,
+        allowed_states=["success"],
+        failed_states=["failed", "skipped"],
+        mode=f"""reschedule""",
+        dag=dag,
+    )
+
+    dim_offer_status = BigQueryOperator(
+        task_id="dim_offer_status",
+        sql=f"""sql/spine_offer_dim_offer_status.sql""",
+        destination_dataset_table=f"""""",
+        write_disposition=f"""WRITE_TRUNCATE""",
+        create_disposition=f"""CREATE_IF_NEEDED""",
+        allow_large_results=True,
+        use_legacy_sql=False,
+        dag=dag,
+    )
+
+    finish_pipeline = DummyOperator(task_id="finish_pipeline")
+
+    # Define task dependencies
     start_pipeline >> dim_offer_type
     start_pipeline >> td_offer_status_core
     start_pipeline >> td_offer_priceable_unit_core
@@ -265,7 +313,7 @@ select a.id,
     start_pipeline >> td_offer_discount_soip
     td_offer_discount_core_pt2 >> dim_offer_discount
     td_offer_discount_soip >> dim_offer_discount
-    start_pipeline >> td_offer_status_soip
+    ext_task_one >> td_offer_status_soip
     td_offer_status_core >> dim_offer_status
     td_offer_status_soip >> dim_offer_status
     dim_offer_type >> finish_pipeline
@@ -273,4 +321,3 @@ select a.id,
     dim_offer_priceable_unit_soip >> finish_pipeline
     dim_offer_discount >> finish_pipeline
     dim_offer_status >> finish_pipeline
-    

@@ -13,322 +13,449 @@
     "dataset_publish": "uk_pub_customer_spine_offer_is"
   },
   "imports": [],
-  "tasks": [
-    {
-    "task_id": "dim_offer_type",
-    "operator": "CreateTable",
-    "parameters": {
-      "write_disposition": "WRITE_TRUNCATE",
-      "destination_table": "dim_offer_type",
-      "target_type": 1,
-      "driving_table": "uk_tds_refdata_eod_is.cc_refdata_bsboffertooffertype",
-      "joins": [
-        {
-        "right": "uk_tds_refdata_eod_is.cc_refdata_bsboffertype",
-        "on": [
+  "tasks": [{
+      "task_id": "dim_offer_type",
+      "operator": "CreateTable",
+      "parameters": {
+        "destination_table": "dim_offer_type",
+        "target_type": 1,
+        "driving_table": "uk_tds_refdata_eod_is.cc_refdata_bsboffertooffertype",
+        "joins": [{
+          "right": "uk_tds_refdata_eod_is.cc_refdata_bsboffertype",
+          "on": [{
+              "operator": "=",
+              "fields": ["uk_tds_refdata_eod_is.cc_refdata_bsboffertooffertype.offertypeid", "uk_tds_refdata_eod_is.cc_refdata_bsboffertype.id"]
+            },
+            {
+              "operator": "<>",
+              "fields": ["uk_tds_refdata_eod_is.cc_refdata_bsboffertype.rdmaction", "'D'"]
+            }
+          ]
+        }],
+        "source_to_target": [
           {
-          "operator": "=",
-          "fields": ["uk_tds_refdata_eod_is.cc_refdata_bsboffertooffertype.offertypeid", "uk_tds_refdata_eod_is.cc_refdata_bsboffertype.id"]
-        },
-        {
+            "name": "id",
+            "source_column": "id"
+          },
+          {
+            "name": "dw_last_modified_dt",
+            "transformation": "current_timestamp()"
+          },
+          {
+            "name": "offer_detail_id",
+            "source_column": "offerid"
+          },
+          {
+            "name": "offer_type_id",
+            "source_column": "offertypeid"
+          },
+          {
+            "name": "offer_type_id",
+            "source_column": "offertypeid"
+          },
+          {
+            "name": "created_dt",
+            "source_column": "created"
+          },
+          {
+            "name": "created_by_id",
+            "source_column": "createdby"
+          },
+          {
+            "name": "last_modified_dt",
+            "source_column": "lastupdate"
+          },
+          {
+            "name": "last_modified_by_id",
+            "source_column": "updatedby"
+          },
+          {
+            "name": "code",
+            "source_name": "uk_tds_refdata_eod_is.cc_refdata_bsboffertype",
+            "source_column": "code"
+          },
+          {
+            "name": "description",
+            "source_name": "uk_tds_refdata_eod_is.cc_refdata_bsboffertype",
+            "source_column": "description"
+          }
+        ],
+        "where": [{
           "operator": "<>",
-          "fields": ["uk_tds_refdata_eod_is.cc_refdata_bsboffertype.rdmaction", "'D'"]
+          "fields": ["uk_tds_refdata_eod_is.cc_refdata_bsboffertooffertype.rdmaction", "'D'"]
         }]
-      }],
-      "source_to_target": [
-        {
-          "name": "id",
-          "source_name": "uk_tds_refdata_eod_is.cc_refdata_bsboffertooffertype",
-          "source_column": "id"
-        },
-        {
-          "name": "dw_last_modified_dt",
-          "transformation": "current_timestamp()"
-        },
-        {
-          "name": "offer_detail_id",
-          "source_name": "uk_tds_refdata_eod_is.cc_refdata_bsboffertooffertype",
-          "source_column": "offerid"
-        },
-        {
-          "name": "offer_type_id",
-          "source_name": "uk_tds_refdata_eod_is.cc_refdata_bsboffertooffertype",
-          "source_column": "offertypeid"
-        },
-        {
-          "name": "offer_type_id",
-          "source_name": "uk_tds_refdata_eod_is.cc_refdata_bsboffertooffertype",
-          "source_column": "offertypeid"
-        },
-        {
-          "name": "created_dt",
-          "source_name": "uk_tds_refdata_eod_is.cc_refdata_bsboffertooffertype",
-          "source_column": "created"
-        },
-        {
-          "name": "created_by_id",
-          "source_name": "uk_tds_refdata_eod_is.cc_refdata_bsboffertooffertype",
-          "source_column": "createdby"
-        },
-        {
-          "name": "last_modified_dt",
-          "source_name": "uk_tds_refdata_eod_is.cc_refdata_bsboffertooffertype",
-          "source_column": "lastupdate"
-        },
-        {
-          "name": "last_modified_by_id",
-          "source_name": "uk_tds_refdata_eod_is.cc_refdata_bsboffertooffertype",
-          "source_column": "updatedby"
-        },
-        {
-          "name": "code",
-          "source_name": "uk_tds_refdata_eod_is.cc_refdata_bsboffertype",
-          "source_column": "code"
-        },
-        {
-          "name": "description",
-          "source_name": "uk_tds_refdata_eod_is.cc_refdata_bsboffertype",
-          "source_column": "description"
-        }
-      ],
-      "where": [{
-        "operator": "<>",
-        "fields": ["uk_tds_refdata_eod_is.cc_refdata_bsboffertooffertype.offertypeid", "'D'"]
-      }]
+      },
+      "dependencies": []
     },
-    "dependencies": []
-  },
-  {
-    "task_id": "td_offer_status_core",
-    "operator": "CreateTable",
-    "parameters": {
-      "write_disposition": "WRITE_TRUNCATE",
-      "destination_table": "td_offer_status_core",
-      "destination_dataset": "uk_pre_customer_spine_offer_is",
-      "target_type": 2,
-      "history": {
-        "partition": [
-          {"name": "portfolio_offer_id", "source_name": "uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer", "source_column": "id"}
+    {
+      "task_id": "td_offer_status_core",
+      "operator": "CreateTable",
+      "parameters": {
+        "write_disposition": "WRITE_TRUNCATE",
+        "destination_table": "td_offer_status_core",
+        "destination_dataset": "uk_pre_customer_spine_offer_is",
+        "target_type": 2,
+        "history": {
+          "partition": [{
+            "name": "portfolio_offer_id",
+            "source_column": "id"
+          }],
+          "driving_column": [{
+              "name": "status_code",
+              "source_column": "status"
+            },
+            {
+              "name": "reason_code",
+              "source_column": "statusreasoncode"
+            }
+          ],
+          "order": [{
+              "name": "effective_from_dt",
+              "transformation": "ifnull(uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer.statuschangeddate,uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer.effective_from_dt)"
+            },
+            {
+              "name": "effective_from_dt_csn_seq",
+              "source_column": "effective_from_dt_csn_seq"
+            },
+            {
+              "name": "effective_from_dt_seq",
+              "source_column": "effective_from_dt_seq"
+            }
+          ]
+        },
+        "driving_table": "uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer",
+        "joins": [{
+          "right": "uk_tds_chordiant_eod_is.cc_chordiant_picklist",
+          "on": [{
+              "operator": "=",
+              "fields": ["uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer.status", "uk_tds_chordiant_eod_is.cc_chordiant_picklist.code"]
+            },
+            {
+              "operator": "=",
+              "fields": ["uk_tds_chordiant_eod_is.cc_chordiant_picklist.logically_deleted", "0"]
+            }
+          ]
+        }],
+        "source_to_target": [{
+            "name": "portfolio_offer_id",
+            "source_name": "uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer",
+            "source_column": "id"
+          },
+          {
+            "name": "dw_last_modified_dt",
+            "transformation": "current_timestamp()"
+          },
+          {
+            "name": "effective_from_dt",
+            "transformation": "ifnull(uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer.statuschangeddate,uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer.effective_from_dt)"
+          },
+          {
+            "name": "effective_from_dt_csn_seq",
+            "source_column": "effective_from_dt_csn_seq"
+          },
+          {
+            "name": "effective_from_dt_seq",
+            "source_column": "effective_from_dt_seq"
+          },
+          {
+            "name": "effective_to_dt",
+            "source_column": "statuschangeddate"
+          },
+          {
+            "name": "status_code",
+            "source_column": "status"
+          },
+          {
+            "name": "status",
+            "source_name": "uk_tds_chordiant_eod_is.cc_chordiant_picklist",
+            "source_column": "codedesc"
+          },
+          {
+            "name": "reason_code",
+            "source_column": "statusreasoncode"
+          },
+          {
+            "name": "reason",
+            "source_name": "uk_tds_chordiant_eod_is.cc_chordiant_picklist",
+            "source_column": "codedesc"
+          }
         ],
-        "driving_column": [
-          {"name": "status_code", "source_name": "uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer", "source_column": "status"},
-          {"name": "reason_code", "source_name": "uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer", "source_column": "statusreasoncode"}
+        "where": [{
+          "operator": "=",
+          "fields": ["uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer.logically_deleted", "0"]
+        }]
+      },
+      "dependencies": []
+    },
+    {
+      "task_id": "td_offer_priceable_unit_core",
+      "operator": "CreateTable",
+      "parameters": {
+        "write_disposition": "WRITE_TRUNCATE",
+        "destination_table": "td_offer_priceable_unit_core",
+        "destination_dataset": "uk_pre_customer_spine_offer_is",
+        "target_type": 1,
+        "driving_table": "uk_tds_chordiant_eod_is.cc_chordiant_bsbpriceableunit",
+        "source_to_target": [{
+            "name": "id",
+            "source_column": "id"
+          },
+          {
+            "name": "dw_last_modified_dt",
+            "transformation": "current_timestamp()"
+          },
+          {
+            "name": "created_dt",
+            "source_column": "created"
+          },
+          {
+            "name": "created_by_id",
+            "source_column": "createdby"
+          },
+          {
+            "name": "last_modified_dt",
+            "source_column": "lastupdate"
+          },
+          {
+            "name": "last_modified_by_id",
+            "source_column": "updatedby"
+          },
+          {
+            "name": "portfolio_offer_id",
+            "source_column": "portfolioofferid"
+          },
+          {
+            "name": "discounted_priceable_unit_id",
+            "source_column": "discountedpriceableunitid"
+          },
+          {
+            "name": "effective_dt",
+            "source_column": "effectivedate"
+          },
+          {
+            "name": "end_dt",
+            "source_column": "endate"
+          },
+          {
+            "name": "quoted_discount",
+            "transformation": "abs(uk_tds_chordiant_eod_is.cc_chordiant_bsbpriceableunit.quotedprice)"
+          }
         ],
-        "order": [
-          {"name": "effective_from_dt", "transformation": "ifnull(uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer.statuschangeddate,uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer.effective_from_dt)"},
-          {"name": "effective_from_dt_csn_seq", "source_name": "uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer", "source_column": "effective_from_dt_csn_seq"},
-          {"name": "effective_from_dt_seq", "source_name": "uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer", "source_column": "effective_from_dt_seq"}
+        "where": [{
+          "operator": "=",
+          "fields": ["uk_tds_chordiant_eod_is.cc_chordiant_bsbpriceableunit.logically_deleted", "0"]
+        }]
+      },
+      "dependencies": []
+    },
+    {
+      "task_id": "td_offer_priceable_unit_soip",
+      "operator": "CreateTable",
+      "parameters": {
+        "sql": "sql/spine_offer_td_offer_priceable_unit_soip.sql",
+        "destination_table": "td_offer_priceable_unit_soip",
+        "destination_dataset": "uk_pre_customer_spine_offer_is"
+      },
+      "dependencies": []
+    },
+    {
+      "task_id": "truncate_dim_offer_priceable_unit",
+      "operator": "CreateTable",
+      "parameters": {
+        "sql": "truncate table uk_pub_customer_spine_offer_is.dim_offer_priceable_unit;",
+        "destination_table": "dim_offer_priceable_unit"
+      },
+      "dependencies": ["td_offer_priceable_unit_soip", "td_offer_priceable_unit_core"]
+    },
+    {
+      "task_id": "dim_offer_priceable_unit_core",
+      "operator": "CreateTable",
+      "parameters": {
+        "write_disposition": "WRITE_APPEND",
+        "destination_table": "dim_offer_priceable_unit",
+        "target_type": 1,
+        "driving_table": "uk_pre_customer_spine_offer_is.td_offer_priceable_unit_core",
+        "source_to_target": [{
+            "name": "id",
+            "source_column": "id"
+          },
+          {
+            "name": "dw_last_modified_dt",
+            "source_column": "dw_last_modified_dt"
+          },
+          {
+            "name": "created_dt",
+            "source_column": "created_dt"
+          },
+          {
+            "name": "created_by_id",
+            "source_column": "created_by_id"
+          },
+          {
+            "name": "last_modified_dt",
+            "source_column": "last_modified_dt"
+          },
+          {
+            "name": "last_modified_by_id",
+            "source_column": "last_modified_by_id"
+          },
+          {
+            "name": "portfolio_offer_id",
+            "source_column": "portfolio_offer_id"
+          },
+          {
+            "name": "discounted_priceable_unit_id",
+            "source_column": "discounted_priceable_unit_id"
+          },
+          {
+            "name": "effective_dt",
+            "source_column": "effective_dt"
+          },
+          {
+            "name": "end_dt",
+            "source_column": "end_dt"
+          },
+          {
+            "name": "quoted_discount",
+            "source_column": "quoted_discount"
+          }
         ]
       },
-      "driving_table": "uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer",
-      "joins": [
-        {
-        "right": "uk_tds_chordiant_eod_is.cc_chordiant_picklist",
-        "on": [
+      "dependencies": ["truncate_dim_offer_priceable_unit"]
+    },
+    {
+      "task_id": "dim_offer_priceable_unit_soip",
+      "operator": "CreateTable",
+      "parameters": {
+        "write_disposition": "WRITE_APPEND",
+        "destination_table": "dim_offer_priceable_unit",
+        "target_type": 1,
+        "driving_table": "uk_pre_customer_spine_offer_is.td_offer_priceable_unit_soip",
+        "source_to_target": [{
+            "name": "id",
+            "source_column": "id"
+          },
           {
-          "operator": "=",
-          "fields": ["uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer.status", "uk_tds_chordiant_eod_is.cc_chordiant_picklist.code"]
-        },
-        {
-          "operator": "=",
-          "fields": ["uk_tds_chordiant_eod_is.cc_chordiant_picklist.logically_deleted", "0"]
-        }]
-      }],
-      "source_to_target": [
-        {"name": "portfolio_offer_id", "source_name": "uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer", "source_column": "id"},
-        {"name": "dw_last_modified_dt", "transformation": "current_timestamp()"},
-        {"name": "effective_from_dt", "transformation": "ifnull(uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer.statuschangeddate,uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer.effective_from_dt)"},
-        {"name": "effective_from_dt_csn_seq", "source_name": "uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer", "source_column": "effective_from_dt_csn_seq"},
-        {"name": "effective_from_dt_seq", "source_name": "uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer", "source_column": "effective_from_dt_seq"},
-        {"name": "effective_to_dt", "source_name": "uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer", "source_column": "statuschangeddate"},
-        {"name": "status_code", "source_name": "uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer", "source_column": "status"},
-        {"name": "status", "source_name": "uk_tds_chordiant_eod_is.cc_chordiant_picklist", "source_column": "codedesc"},
-        {"name": "reason_code", "source_name": "uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer", "source_column": "statusreasoncode"},
-        {"name": "reason", "source_name": "uk_tds_chordiant_eod_is.cc_chordiant_picklist", "source_column": "codedesc"}              
-      ],
-      "where": [
-        {
-        "operator": "=",
-        "fields": ["uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer.logically_deleted", "0"]
-      }
-    ]
+            "name": "dw_last_modified_dt",
+            "source_column": "dw_last_modified_dt"
+          },
+          {
+            "name": "created_dt",
+            "source_column": "created_dt"
+          },
+          {
+            "name": "created_by_id",
+            "source_column": "created_by_id"
+          },
+          {
+            "name": "last_modified_dt",
+            "source_column": "last_modified_dt"
+          },
+          {
+            "name": "last_modified_by_id",
+            "source_column": "last_modified_by_id"
+          },
+          {
+            "name": "portfolio_offer_id",
+            "source_column": "portfolio_offer_id"
+          },
+          {
+            "name": "discounted_priceable_unit_id",
+            "source_column": "discounted_priceable_unit_id"
+          },
+          {
+            "name": "effective_dt",
+            "source_column": "effective_dt"
+          },
+          {
+            "name": "end_dt",
+            "source_column": "end_dt"
+          },
+          {
+            "name": "quoted_discount",
+            "source_column": "quoted_discount"
+          }
+        ]
+      },
+      "dependencies": ["truncate_dim_offer_priceable_unit"]
     },
-    "dependencies": []
-  },
-  {
-    "task_id": "td_offer_priceable_unit_core",
-    "operator": "CreateTable",
-    "parameters": {
-      "write_disposition": "WRITE_TRUNCATE",
-      "destination_table": "td_offer_priceable_unit_core",
-      "destination_dataset": "uk_pre_customer_spine_offer_is",
-      "target_type": 1,
-      "driving_table": "uk_tds_chordiant_eod_is.cc_chordiant_bsbpriceableunit",
-      "source_to_target": [
-        {"name": "id", "source_name": "uk_tds_chordiant_eod_is.cc_chordiant_bsbpriceableunit", "source_column": "id"},
-        {"name": "dw_last_modified_dt", "transformation": "current_timestamp()"},
-        {"name": "created_dt", "source_name": "uk_tds_chordiant_eod_is.cc_chordiant_bsbpriceableunit", "source_column": "created"},
-        {"name": "created_by_id", "source_name": "uk_tds_chordiant_eod_is.cc_chordiant_bsbpriceableunit", "source_column": "createdby"},
-        {"name": "last_modified_dt", "source_name": "uk_tds_chordiant_eod_is.cc_chordiant_bsbpriceableunit", "source_column": "lastupdate"},
-        {"name": "last_modified_by_id", "source_name": "uk_tds_chordiant_eod_is.cc_chordiant_bsbpriceableunit", "source_column": "updatedby"},
-        {"name": "portfolio_offer_id", "source_name": "uk_tds_chordiant_eod_is.cc_chordiant_bsbpriceableunit", "source_column": "portfolioofferid"},
-        {"name": "discounted_priceable_unit_id", "source_name": "uk_tds_chordiant_eod_is.cc_chordiant_bsbpriceableunit", "source_column": "discountedpriceableunitid"},
-        {"name": "effective_dt", "source_name": "uk_tds_chordiant_eod_is.cc_chordiant_bsbpriceableunit", "source_column": "effectivedate"},
-        {"name": "end_dt", "source_name": "uk_tds_chordiant_eod_is.cc_chordiant_bsbpriceableunit", "source_column": "endate"},
-        {"name": "quoted_discount", "transformation": "abs(uk_tds_chordiant_eod_is.cc_chordiant_bsbpriceableunit.quotedprice)"}                             
-      ],
-      "where": [
-        {
-        "operator": "=",
-        "fields": ["uk_tds_chordiant_eod_is.cc_chordiant_bsbpriceableunit.logically_deleted", "0"]
-      }
-    ]
+    {
+      "task_id": "td_offer_discount_core_pt1",
+      "operator": "BigQueryOperator",
+      "parameters": {
+        "sql": "sql/spine_offer_td_offer_discount_1.sql",
+        "destination_dataset_table": "",
+        "write_disposition": "WRITE_TRUNCATE",
+        "create_disposition": "CREATE_IF_NEEDED",
+        "allow_large_results": true,
+        "use_legacy_sql": false
+      },
+      "dependencies": []
     },
-    "dependencies": []
-  },
-{
-  "task_id": "td_offer_priceable_unit_soip",
-  "operator": "CreateTable",
-  "parameters": {
-    "sql":"sql/spine_offer_td_offer_priceable_unit_soip.sql",
-    "destination_table": "td_offer_priceable_unit_soip",
-    "destination_dataset": "uk_pre_customer_spine_offer_is"
-  },
-  "dependencies": []
-},
-{
-  "task_id": "truncate_dim_offer_priceable_unit",
-  "operator": "CreateTable",
-  "parameters": {
-    "sql":"truncate table uk_pub_customer_spine_offer_is.dim_offer_priceable_unit;",
-    "destination_table": "dim_offer_priceable_unit"
-  },
-  "dependencies": ["td_offer_priceable_unit_soip", "td_offer_priceable_unit_core"]
-},
-{
-  "task_id": "dim_offer_priceable_unit_core",
-  "operator": "CreateTable",
-  "parameters": {
-    "write_disposition": "WRITE_APPEND",
-    "destination_table": "dim_offer_priceable_unit",
-    "target_type": 1,
-    "driving_table": "uk_pre_customer_spine_offer_is.td_offer_priceable_unit_core",
-    "source_to_target": [
-      {"name": "id", "source_name": "uk_pre_customer_spine_offer_is.td_offer_priceable_unit_core", "source_column": "id"},
-      {"name": "dw_last_modified_dt", "source_name": "uk_pre_customer_spine_offer_is.td_offer_priceable_unit_core", "source_column": "dw_last_modified_dt"},
-      {"name": "created_dt", "source_name": "uk_pre_customer_spine_offer_is.td_offer_priceable_unit_core", "source_column": "created_dt"},
-      {"name": "created_by_id", "source_name": "uk_pre_customer_spine_offer_is.td_offer_priceable_unit_core", "source_column": "created_by_id"},
-      {"name": "last_modified_dt", "source_name": "uk_pre_customer_spine_offer_is.td_offer_priceable_unit_core", "source_column": "last_modified_dt"},
-      {"name": "last_modified_by_id", "source_name": "uk_pre_customer_spine_offer_is.td_offer_priceable_unit_core", "source_column": "last_modified_by_id"},
-      {"name": "portfolio_offer_id", "source_name": "uk_pre_customer_spine_offer_is.td_offer_priceable_unit_core", "source_column": "portfolio_offer_id"},
-      {"name": "discounted_priceable_unit_id", "source_name": "uk_pre_customer_spine_offer_is.td_offer_priceable_unit_core", "source_column": "discounted_priceable_unit_id"},
-      {"name": "effective_dt", "source_name": "uk_pre_customer_spine_offer_is.td_offer_priceable_unit_core", "source_column": "effective_dt"},
-      {"name": "end_dt", "source_name": "uk_pre_customer_spine_offer_is.td_offer_priceable_unit_core", "source_column": "end_dt"},
-      {"name": "quoted_discount","source_name": "uk_pre_customer_spine_offer_is.td_offer_priceable_unit_core", "source_column": "quoted_discount"}
-    ]
-  },
-  "dependencies": ["truncate_dim_offer_priceable_unit"]
-},
-{
-  "task_id": "dim_offer_priceable_unit_soip",
-  "operator": "CreateTable",
-  "parameters": {
-    "write_disposition": "WRITE_APPEND",
-    "destination_table": "dim_offer_priceable_unit",
-    "target_type": 1,
-    "driving_table": "uk_pre_customer_spine_offer_is.td_offer_priceable_unit_soip",
-    "source_to_target": [
-      {"name": "id", "source_name": "uk_pre_customer_spine_offer_is.td_offer_priceable_unit_soip", "source_column": "id"},
-      {"name": "dw_last_modified_dt", "source_name": "uk_pre_customer_spine_offer_is.td_offer_priceable_unit_soip", "source_column": "dw_last_modified_dt"},
-      {"name": "created_dt", "source_name": "uk_pre_customer_spine_offer_is.td_offer_priceable_unit_soip", "source_column": "created_dt"},
-      {"name": "created_by_id", "source_name": "uk_pre_customer_spine_offer_is.td_offer_priceable_unit_soip", "source_column": "created_by_id"},
-      {"name": "last_modified_dt", "source_name": "uk_pre_customer_spine_offer_is.td_offer_priceable_unit_soip", "source_column": "last_modified_dt"},
-      {"name": "last_modified_by_id", "source_name": "uk_pre_customer_spine_offer_is.td_offer_priceable_unit_soip", "source_column": "last_modified_by_id"},
-      {"name": "portfolio_offer_id", "source_name": "uk_pre_customer_spine_offer_is.td_offer_priceable_unit_soip", "source_column": "portfolio_offer_id"},
-      {"name": "discounted_priceable_unit_id", "source_name": "uk_pre_customer_spine_offer_is.td_offer_priceable_unit_soip", "source_column": "discounted_priceable_unit_id"},
-      {"name": "effective_dt", "source_name": "uk_pre_customer_spine_offer_is.td_offer_priceable_unit_soip", "source_column": "effective_dt"},
-      {"name": "end_dt", "source_name": "uk_pre_customer_spine_offer_is.td_offer_priceable_unit_soip", "source_column": "end_dt"},
-      {"name": "quoted_discount","source_name": "uk_pre_customer_spine_offer_is.td_offer_priceable_unit_soip", "source_column": "quoted_discount"}
-    ]
-  },
-  "dependencies": ["truncate_dim_offer_priceable_unit"]
-},
-{
-  "task_id": "td_offer_discount_core_pt1",
-  "operator": "BigQueryOperator",
-  "parameters": {
-    "sql":"sql/spine_offer_td_offer_discount_1.sql",
-    "destination_dataset_table": "",
-    "write_disposition": "WRITE_TRUNCATE",
-    "create_disposition": "CREATE_IF_NEEDED",
-    "allow_large_results": true,
-    "use_legacy_sql": false
-  },
-  "dependencies": []
-},
-{
-  "task_id": "td_offer_discount_core_pt2",
-  "operator": "BigQueryOperator",
-  "parameters": {
-    "sql":"sql/spine_offer_td_offer_discount_2.sql",
-    "destination_dataset_table": "",
-    "write_disposition": "WRITE_TRUNCATE",
-    "create_disposition": "CREATE_IF_NEEDED",
-    "allow_large_results": true,
-    "use_legacy_sql": false
-  },
-  "dependencies": ["td_offer_discount_core_pt1"]
-},
-{
-  "task_id": "td_offer_discount_soip",
-  "operator": "BigQueryOperator",
-  "parameters": {
-    "sql":"sql/spine_offer_td_offer_discount_soip.sql",
-    "destination_dataset_table": "",
-    "write_disposition": "WRITE_TRUNCATE",
-    "create_disposition": "CREATE_IF_NEEDED",
-    "allow_large_results": true,
-    "use_legacy_sql": false
-  },
-  "dependencies": []
-},
-{
-  "task_id": "dim_offer_discount",
-  "operator": "BigQueryOperator",
-  "parameters": {
-    "sql":"sql/spine_offer_dim_offer_discount.sql",
-    "destination_dataset_table": "",
-    "write_disposition": "WRITE_TRUNCATE",
-    "create_disposition": "CREATE_IF_NEEDED",
-    "allow_large_results": true,
-    "use_legacy_sql": false
-  },
-  "dependencies": ["td_offer_discount_core_pt2", "td_offer_discount_soip"]
-},
-{
-  "task_id": "td_offer_status_soip",
-  "operator": "BigQueryOperator",
-  "parameters": {
-    "sql":"sql/spine_offer_td_offer_status_soip.sql",
-    "destination_dataset_table": "",
-    "write_disposition": "WRITE_TRUNCATE",
-    "create_disposition": "CREATE_IF_NEEDED",
-    "allow_large_results": true,
-    "use_legacy_sql": false
-  },
-  "dependencies": []
-},
-{
-  "task_id": "dim_offer_status",
-  "operator": "BigQueryOperator",
-  "parameters": {
-    "sql":"sql/spine_offer_dim_offer_status.sql",
-    "destination_dataset_table": "",
-    "write_disposition": "WRITE_TRUNCATE",
-    "create_disposition": "CREATE_IF_NEEDED",
-    "allow_large_results": true,
-    "use_legacy_sql": false
-  },
-  "dependencies": ["td_offer_status_core", "td_offer_status_soip"]
-}]
+    {
+      "task_id": "td_offer_discount_core_pt2",
+      "operator": "BigQueryOperator",
+      "parameters": {
+        "sql": "sql/spine_offer_td_offer_discount_2.sql",
+        "destination_dataset_table": "",
+        "write_disposition": "WRITE_TRUNCATE",
+        "create_disposition": "CREATE_IF_NEEDED",
+        "allow_large_results": true,
+        "use_legacy_sql": false
+      },
+      "dependencies": ["td_offer_discount_core_pt1"]
+    },
+    {
+      "task_id": "td_offer_discount_soip",
+      "operator": "BigQueryOperator",
+      "parameters": {
+        "sql": "sql/spine_offer_td_offer_discount_soip.sql",
+        "destination_dataset_table": "",
+        "write_disposition": "WRITE_TRUNCATE",
+        "create_disposition": "CREATE_IF_NEEDED",
+        "allow_large_results": true,
+        "use_legacy_sql": false
+      },
+      "dependencies": []
+    },
+    {
+      "task_id": "dim_offer_discount",
+      "operator": "BigQueryOperator",
+      "parameters": {
+        "sql": "sql/spine_offer_dim_offer_discount.sql",
+        "destination_dataset_table": "",
+        "write_disposition": "WRITE_TRUNCATE",
+        "create_disposition": "CREATE_IF_NEEDED",
+        "allow_large_results": true,
+        "use_legacy_sql": false
+      },
+      "dependencies": ["td_offer_discount_core_pt2", "td_offer_discount_soip"]
+    },
+    {
+      "task_id": "td_offer_status_soip",
+      "operator": "BigQueryOperator",
+      "parameters": {
+        "sql": "sql/spine_offer_td_offer_status_soip.sql",
+        "destination_dataset_table": "",
+        "write_disposition": "WRITE_TRUNCATE",
+        "create_disposition": "CREATE_IF_NEEDED",
+        "allow_large_results": true,
+        "use_legacy_sql": false
+      },
+      "dependencies": ["another_dag.task_one"]
+    },
+    {
+      "task_id": "dim_offer_status",
+      "operator": "BigQueryOperator",
+      "parameters": {
+        "sql": "sql/spine_offer_dim_offer_status.sql",
+        "destination_dataset_table": "",
+        "write_disposition": "WRITE_TRUNCATE",
+        "create_disposition": "CREATE_IF_NEEDED",
+        "allow_large_results": true,
+        "use_legacy_sql": false
+      },
+      "dependencies": ["td_offer_status_core", "td_offer_status_soip"]
+    }
+  ]
 }
