@@ -1,4 +1,5 @@
-import datetime
+import inspect
+import os
 
 from logging import Logger, NOTSET, Formatter, FileHandler, StreamHandler
 
@@ -29,3 +30,18 @@ class ILogger(Logger):
 
         self.addHandler(fileHandler)
         self.addHandler(streamHandler)
+
+
+
+def pop_stack() -> str:
+    """
+    It returns the name of the file and function that called it
+
+    Returns:
+      The name of the file and the function that called the function.
+    """
+    frame = inspect.stack()[1]
+    module = inspect.getmodule(frame[0])
+    filename = module.__file__
+    return f"file: {os.path.basename(filename)} - method: {frame[3]}"
+
