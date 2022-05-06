@@ -1,6 +1,8 @@
 # sconkie-cloud-composer
 A data pipeline using Cloud Composer and other GCP tools.
 
+[![GitHub Super-Linter](https://github.com/sean-conkie/sconkie-cloud-composer/workflows/Lint%20Code%20Base/badge.svg)](https://github.com/marketplace/actions/super-linter)
+
 ## IAM
 The following roles are required in GCP to allow Cloud Composer build and run.
 ### Service Account
