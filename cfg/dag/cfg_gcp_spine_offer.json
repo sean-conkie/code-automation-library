@@ -32,7 +32,8 @@
             }
           ]
         }],
-        "source_to_target": [{
+        "source_to_target": [
+          {
             "name": "id",
             "source_column": "id"
           },
