@@ -155,7 +155,7 @@ def create_table_task(logger: ILogger, task: dict, properties: dict) -> dict:
         A dictionary containing expected parameters for the desired task (BigQueryOperator)
     """
 
-    logger.info(f"{pop_stack()} - STARTED".center(100,'-'))
+    logger.info(f"{pop_stack()} - STARTED".center(100, "-"))
     dataset_staging = properties["dataset_staging"]
     dataset_publish = (
         "{dataset_publish}"
@@ -165,7 +165,7 @@ def create_table_task(logger: ILogger, task: dict, properties: dict) -> dict:
     destination_dataset_table = (
         f"{dataset_publish}.{task['parameters']['destination_table']}"
     )
-    
+
     # if user has provided a link to a .sql file, use it otherwise look to create .sql from source to target parameter
     if "sql" in task["parameters"].keys():
         sql = task["parameters"]["sql"]
@@ -186,12 +186,10 @@ def create_table_task(logger: ILogger, task: dict, properties: dict) -> dict:
         "create_disposition": "CREATE_IF_NEEDED",
         "allow_large_results": True,
         "use_legacy_sql": False,
-        "params": {
-            'dataset_publish': dataset_publish
-        }
+        "params": {"dataset_publish": dataset_publish},
     }
 
-    logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100,'-'))
+    logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100, "-"))
     return outp
 
 
@@ -205,7 +203,7 @@ def create_task(logger: ILogger, task: dict) -> str:
     returns:
         A string of python code that can be added to the target file
     """
-    logger.info(f"{pop_stack()} - STARTED".center(100,'-'))
+    logger.info(f"{pop_stack()} - STARTED".center(100, "-"))
     logger.debug(
         f"""{pop_stack()} - creating task {task["task_id"]} from:
                                parameters - {task["parameters"]}"""
@@ -223,7 +221,7 @@ def create_task(logger: ILogger, task: dict) -> str:
             value = task["parameters"][key]
         elif type(task["parameters"][key]) == str:
             value = f"f'''{task['parameters'][key]}'''"
-        elif key == 'params':
+        elif key == "params":
             value = f"{{'dataset_publish': f'{task['parameters'][key]['dataset_publish']}'}}"
         else:
             value = f"{task['parameters'][key]}"
@@ -231,7 +229,7 @@ def create_task(logger: ILogger, task: dict) -> str:
         outp.append(f"{key} = {value}")
     outp.append("dag=dag)")
 
-    logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100,'-'))
+    logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100, "-"))
     return ",\n          ".join(outp)
 
 
@@ -249,7 +247,7 @@ def create_dag_string(logger: ILogger, name: str, dag: dict) -> str:
     Returns:
       A string of python code that can be added to the target file
     """
-    logger.info(f"{pop_stack()} - STARTED".center(100,'-'))
+    logger.info(f"{pop_stack()} - STARTED".center(100, "-"))
     # we first set DAG defaults - these can also be excluded completely and
     # use Environment settings
     odag = {
@@ -281,7 +279,7 @@ def create_dag_string(logger: ILogger, name: str, dag: dict) -> str:
 
     outp = f"'{name}',{', '.join([f'{key} = {odag[key]}' for key in odag.keys()])}"
 
-    logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100,'-'))
+    logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100, "-"))
     return outp
 
 
@@ -296,7 +294,7 @@ def create_dag_args(logger: ILogger, args: dict) -> str:
     Returns:
       A string that is a dictionary of arguments for the DAG.
     """
-    logger.info(f"{pop_stack()} - STARTED".center(100,'-'))
+    logger.info(f"{pop_stack()} - STARTED".center(100, "-"))
     oargs = {
         "depends_on_past": False,
         "email_on_failure": False,
@@ -343,7 +341,7 @@ def create_dag_args(logger: ILogger, args: dict) -> str:
     )
     outp = f"{{{outstr}}}"
 
-    logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100,'-'))
+    logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100, "-"))
     return outp
 
 
@@ -359,7 +357,7 @@ def get_config(logger: ILogger, path: str) -> dict:
       A dictionary object
     """
 
-    logger.info(f"{pop_stack()} - STARTED".center(100,'-'))
+    logger.info(f"{pop_stack()} - STARTED".center(100, "-"))
     if not path:
         logger.warning(f"{pop_stack()} - File {path:} does not exist.")
         return {}
@@ -383,7 +381,7 @@ def get_config(logger: ILogger, path: str) -> dict:
             filecontent = sourcefile.read()
 
         # return file
-        logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100,'-'))
+        logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100, "-"))
         return json.loads(filecontent)
     except:
         logger.error(f"{pop_stack()} - {sys.exc_info()[0]:}")

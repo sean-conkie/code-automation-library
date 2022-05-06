@@ -5,29 +5,34 @@ from jinja2 import Environment, FileSystemLoader
 from logger import ILogger, pop_stack
 
 
-def create_sql_file(logger: ILogger, task: dict, file_path: str = './dags/sql/', dataset_staging: str = None) -> str:
+def create_sql_file(
+    logger: ILogger,
+    task: dict,
+    file_path: str = "./dags/sql/",
+    dataset_staging: str = None,
+) -> str:
     """
     > This function creates a SQL file for a given task
-    
+
     The function takes in the following arguments:
-    
+
     - logger: This is the logger object that is passed to the function.
     - task: The task dictionary
     - file_path: The path to the directory where the SQL file will be created.
     - dataset_staging: The name of the staging dataset
-    
+
     Args:
       logger (ILogger): ILogger - this is the logger object that is passed to the function.
       task (dict): the task dictionary
       file_path (str): The path to the directory where the SQL file will be created. Defaults to
     ./dags/sql
       dataset_staging (str): The name of the staging dataset.
-    
+
     Returns:
       The path to the SQL file that was created.
     """
-    
-    logger.info(f"{pop_stack()} - STARTED".center(100,'-'))
+
+    logger.info(f"{pop_stack()} - STARTED".center(100, "-"))
     sql = create_sql(logger, task, dataset_staging)
     file_loader = FileSystemLoader("./templates")
     env = Environment(loader=file_loader)
@@ -35,16 +40,17 @@ def create_sql_file(logger: ILogger, task: dict, file_path: str = './dags/sql/',
     template = env.get_template("template_sql.txt")
     output = template.render(
         sql=sql,
-        task_id=task['task_id'],
-        created_date=datetime.now().strftime('%d %b %Y')
+        task_id=task["task_id"],
+        created_date=datetime.now().strftime("%d %b %Y"),
     )
 
     sql_file = f"{file_path}{task['task_id']}.sql"
     with open(sql_file, "w") as outfile:
         outfile.write(output)
 
-    logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100,'-'))
+    logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100, "-"))
     return sql_file
+
 
 def create_sql(logger: ILogger, task: dict, dataset_staging: str = None) -> str:
     """Method for generating a SQL query to be executed by the task.
@@ -68,8 +74,8 @@ def create_sql(logger: ILogger, task: dict, dataset_staging: str = None) -> str:
     Returns:
       A string containing the SQL query to be executed by the task.
     """
-    logger.info(f"{pop_stack()} - STARTED".center(100,'-'))
-    
+    logger.info(f"{pop_stack()} - STARTED".center(100, "-"))
+
     target_dataset = (
         "{{dataset_publish}}"
         if "destination_dataset" not in task["parameters"].keys()
@@ -85,29 +91,34 @@ def create_sql(logger: ILogger, task: dict, dataset_staging: str = None) -> str:
         f'{pop_stack()} - creating sql for table type {task["parameters"]["target_type"]}'
     )
     if task["parameters"]["target_type"] == 1:
-        sql = create_type_1_sql(logger, task,  target_dataset, write_disposition)
+        sql = create_type_1_sql(logger, task, target_dataset, write_disposition)
     elif task["parameters"]["target_type"] == 2:
-        sql = create_type_2_sql(logger, task, target_dataset, dataset_staging, write_disposition)
+        sql = create_type_2_sql(
+            logger, task, target_dataset, dataset_staging, write_disposition
+        )
 
-    outp = '\n'.join(sql)
-    logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100,'-'))
+    outp = "\n".join(sql)
+    logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100, "-"))
     return outp
 
-def create_type_1_sql(logger: ILogger, task:dict,  target_dataset:str, write_disposition: str) -> list:
+
+def create_type_1_sql(
+    logger: ILogger, task: dict, target_dataset: str, write_disposition: str
+) -> list:
     """
     It creates a SQL statement that will insert data into a table
-    
+
     Args:
       logger (ILogger): ILogger - this is the logger object that is passed to the function.
       task (dict): the task dictionary
       target_dataset (str): The dataset where the destination table is located.
       write_disposition (str): This is the write disposition for the query. It can be WRITE_TRUNCATE,
     WRITE_APPEND, WRITE_EMPTY.
-    
+
     Returns:
       A list of strings
     """
-    logger.info(f"{pop_stack()} - STARTED".center(100,'-'))
+    logger.info(f"{pop_stack()} - STARTED".center(100, "-"))
     sql = []
     logger.info(f'{pop_stack()} - set write disposition - "{write_disposition}"')
     if write_disposition == "WRITE_TRUNCATE":
@@ -130,17 +141,24 @@ def create_type_1_sql(logger: ILogger, task:dict,  target_dataset:str, write_dis
     sql.append("\n".join(frm))
     sql.append("\n".join(where))
     sql.append(";\n")
-    logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100,'-'))
+    logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100, "-"))
     return sql
 
-def create_type_2_sql(logger: ILogger, task:dict, target_dataset:str, dataset_staging: str, write_disposition: str) -> list:
+
+def create_type_2_sql(
+    logger: ILogger,
+    task: dict,
+    target_dataset: str,
+    dataset_staging: str,
+    write_disposition: str,
+) -> list:
     """
     > Create a series of SQL statements to create a table that contains the current and previous values
     of the driving columns, then create a table that contains the current and previous values of the
     driving columns and the current and previous values of the other columns, then create a table that
     contains the current and previous values of the driving columns and the current and previous values
     of the other columns and the effective_to_dt column
-    
+
     Args:
       logger (ILogger): ILogger - this is the logger object that is passed to the function
       task (dict): the task object from the config file
@@ -149,15 +167,13 @@ def create_type_2_sql(logger: ILogger, task:dict, target_dataset:str, dataset_st
       write_disposition (str): This is the write disposition for the final table.  This can be
     WRITE_TRUNCATE, WRITE_APPEND, WRITE_EMPTY.  If you choose WRITE_APPEND, you will need to add a where
     clause to the final query to ensure you don't duplicate data.
-    
+
     Returns:
       A list of SQL statements
     """
-    logger.info(f"{pop_stack()} - STARTED".center(100,'-'))
+    logger.info(f"{pop_stack()} - STARTED".center(100, "-"))
     sql = []
-    td_table = re.sub(
-        r"^[a-zA-Z]+_", "td_", task["parameters"]["destination_table"]
-    )
+    td_table = re.sub(r"^[a-zA-Z]+_", "td_", task["parameters"]["destination_table"])
     logger.info(
         f'{pop_stack()} - create sql for transient table, pull source data and previous columns - "{dataset_staging}.{td_table}_p1"'
     )
@@ -165,26 +181,57 @@ def create_type_2_sql(logger: ILogger, task:dict, target_dataset:str, dataset_st
     # first we create p1, this table contains required columns plus previous
     # value for driving tables.  Previous values are used later to complete CDC
     analytics = create_type_2_analytic_list(logger, task)
-    sql.append(create_table_query(logger, task, dataset_staging, f"{td_table}_p1", dataset_staging, 'WRITE_TRANSIENT', analytics))
+    sql.append(
+        create_table_query(
+            logger,
+            task,
+            dataset_staging,
+            f"{td_table}_p1",
+            dataset_staging,
+            "WRITE_TRANSIENT",
+            analytics,
+        )
+    )
 
     logger.info(
         f'{pop_stack()} - create sql for transient table, complete CDC - "{dataset_staging}.{td_table}_p2"'
     )
 
-    # second we complete CDC.  We create a new task object using our p1 table as 
+    # second we complete CDC.  We create a new task object using our p1 table as
     # driving table
     p2_task = {
         "parameters": {
             "write_disposition": "WRITE_TRUNCATE",
             "driving_table": f"{dataset_staging}.{td_table}_p1",
-            "source_to_target": [{
-                "transformation": f"* except({','.join([t['column']['name'] for t in analytics])})"
-            }],
-            "where": [{'fields': [f"ifnull(cast({c['name']} as string),'NULL')", f"ifnull(cast(prev_{c['name']} as string),'NULL')"], 'operator': '!=', 'condition': 'or'} for c in task['parameters']['history']['driving_column']]
+            "source_to_target": [
+                {
+                    "transformation": f"* except({','.join([t['column']['name'] for t in analytics])})"
+                }
+            ],
+            "where": [
+                {
+                    "fields": [
+                        f"ifnull(cast({c['name']} as string),'NULL')",
+                        f"ifnull(cast(prev_{c['name']} as string),'NULL')",
+                    ],
+                    "operator": "!=",
+                    "condition": "or",
+                }
+                for c in task["parameters"]["history"]["driving_column"]
+            ],
         }
     }
 
-    sql.append(create_table_query(logger, p2_task, dataset_staging, f"{td_table}_p2", dataset_staging, 'WRITE_TRANSIENT'))
+    sql.append(
+        create_table_query(
+            logger,
+            p2_task,
+            dataset_staging,
+            f"{td_table}_p2",
+            dataset_staging,
+            "WRITE_TRANSIENT",
+        )
+    )
 
     logger.info(
         f'{pop_stack()} - create sql for transient table, add/replace effective_to_dt with lead - "{dataset_staging}.{td_table}"'
@@ -194,77 +241,101 @@ def create_type_2_sql(logger: ILogger, task:dict, target_dataset:str, dataset_st
         "parameters": {
             "write_disposition": "WRITE_TRUNCATE",
             "driving_table": f"{dataset_staging}.{td_table}_p2",
-            "source_to_target": [{'name': c['name'], 'source_column': c['name']} for c in task['parameters']['source_to_target']]
+            "source_to_target": [
+                {"name": c["name"], "source_column": c["name"]}
+                for c in task["parameters"]["source_to_target"]
+            ],
         }
     }
-    analytics = [{
-            'type': 'lead',
-            'column': {
-                'name': f"effective_to_dt",
-                'source_column': 'effective_from_dt'
+    analytics = [
+        {
+            "type": "lead",
+            "column": {
+                "name": f"effective_to_dt",
+                "source_column": "effective_from_dt",
             },
-            'partition': [{
-                "name": f"{p['name']}",
-                "source_column": f"{p['name']}"
-            } for p in task['parameters']['history']['partition']],
-            'order': [{
-                "name": "effective_from_dt",
-                "source_column": "effective_from_dt"
-                },
-                {
-                "name": "effective_from_dt_csn_seq",
-                "source_column": "effective_from_dt_csn_seq"
-                },
-                {
-                "name": "effective_from_dt_seq",
-                "source_column": "effective_from_dt_seq"
-                }
+            "partition": [
+                {"name": f"{p['name']}", "source_column": f"{p['name']}"}
+                for p in task["parameters"]["history"]["partition"]
             ],
-            'offset': ', 1',
-            'default': ", timestamp('2999-12-31 23:59:59')"
-    }]
-    sql.append(create_table_query(logger, td_task, target_dataset, f"{td_table}", dataset_staging, write_disposition, analytics))
+            "order": [
+                {"name": "effective_from_dt", "source_column": "effective_from_dt"},
+                {
+                    "name": "effective_from_dt_csn_seq",
+                    "source_column": "effective_from_dt_csn_seq",
+                },
+                {
+                    "name": "effective_from_dt_seq",
+                    "source_column": "effective_from_dt_seq",
+                },
+            ],
+            "offset": ", 1",
+            "default": ", timestamp('2999-12-31 23:59:59')",
+        }
+    ]
+    sql.append(
+        create_table_query(
+            logger,
+            td_task,
+            target_dataset,
+            f"{td_table}",
+            dataset_staging,
+            write_disposition,
+            analytics,
+        )
+    )
 
-    logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100,'-'))
-    return sql 
+    logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100, "-"))
+    return sql
 
-def create_type_2_analytic_list(logger: ILogger, task:dict) -> list:
+
+def create_type_2_analytic_list(logger: ILogger, task: dict) -> list:
     """
     > This function creates a list of analytic functions that will be used to create a lag column for
     each column in the driving column list
-    
+
     Args:
       logger (ILogger): ILogger - this is the logger object that is passed to the function.
       task (dict): the task dictionary
-    
+
     Returns:
       A list of dictionaries.
     """
-    logger.info(f"{pop_stack()} - STARTED".center(100,'-'))
+    logger.info(f"{pop_stack()} - STARTED".center(100, "-"))
     outp = []
-    history = task["parameters"]["history"] if 'history' in task['parameters'].keys() else []
-    for c in history['driving_column']:
+    history = (
+        task["parameters"]["history"] if "history" in task["parameters"].keys() else []
+    )
+    for c in history["driving_column"]:
         analytic = {
-            'type': 'lag',
-            'column': {
-                'name': f"prev_{c['name']}",
-                'source_column': c['source_column']
+            "type": "lag",
+            "column": {
+                "name": f"prev_{c['name']}",
+                "source_column": c["source_column"],
             },
-            'partition': history['partition'],
-            'order': history['order'],
-            'offset': ', 1',
-            'default': ''
+            "partition": history["partition"],
+            "order": history["order"],
+            "offset": ", 1",
+            "default": "",
         }
         outp.append(analytic)
 
-    logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100,'-'))
+    logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100, "-"))
     return outp
 
 
-def create_table_query(logger: ILogger, task:dict, target_dataset:str, target_table: str, dataset_staging: str, write_disposition: str, analytics: list = []) -> str:
+def create_table_query(
+    logger: ILogger,
+    task: dict,
+    target_dataset: str,
+    target_table: str,
+    dataset_staging: str,
+    write_disposition: str,
+    analytics: list = [],
+) -> str:
     """
     This function creates a SQL query to create a table in BigQuery
-    
+
     Args:
       logger (ILogger): ILogger - this is the logger object that is passed to the function
       task (dict): the task dictionary
@@ -274,46 +345,50 @@ def create_table_query(logger: ILogger, task:dict, target_dataset:str, target_ta
       write_disposition (str): This is the write disposition for the query. It can be WRITE_TRUNCATE,
     WRITE_APPEND, WRITE_EMPTY, WRITE_TRANSIENT.
       analytics (list): list = []) -> str: list of analytic dict objects
-    
+
     Returns:
       A string of SQL
     """
-    logger.info(f"{pop_stack()} - STARTED".center(100,'-'))
+    logger.info(f"{pop_stack()} - STARTED".center(100, "-"))
     sql = []
-    # create working task object so it can be edited without impacting 
+    # create working task object so it can be edited without impacting
     # original
     wtask = {
-        'parameters': {
-            'destination_table': task['parameters']['destination_table'] if 'desitnation_table' in task['parameters'].keys() else '',
-            'driving_table': task['parameters']['driving_table'],
-            'source_to_target': [c for c in task['parameters']['source_to_target']]
+        "parameters": {
+            "destination_table": task["parameters"]["destination_table"]
+            if "desitnation_table" in task["parameters"].keys()
+            else "",
+            "driving_table": task["parameters"]["driving_table"],
+            "source_to_target": [c for c in task["parameters"]["source_to_target"]],
         }
     }
 
-    if 'joins' in task['parameters'].keys():
-        wtask['parameters']['joins'] = [j for j in task['parameters']['joins']]
+    if "joins" in task["parameters"].keys():
+        wtask["parameters"]["joins"] = [j for j in task["parameters"]["joins"]]
 
-    if 'where' in task['parameters'].keys():
-        wtask['parameters']['where'] = [w for w in task['parameters']['where']]        
+    if "where" in task["parameters"].keys():
+        wtask["parameters"]["where"] = [w for w in task["parameters"]["where"]]
 
-    if write_disposition == 'WRITE_APPEND':
-        table_operation = 'insert into' 
-        table_operation_suffix = ''
-    elif write_disposition == 'WRITE_TRUNCATE':
-        table_operation = f'''truncate table {target_dataset}.{target_table}; 
-insert into'''
-        table_operation_suffix = ''
-    elif write_disposition == 'WRITE_TRANSIENT':
-        table_operation = f'create or replace' 
-        table_operation_suffix = 'as'
+    if write_disposition == "WRITE_APPEND":
+        table_operation = "insert into"
+        table_operation_suffix = ""
+    elif write_disposition == "WRITE_TRUNCATE":
+        table_operation = f"""truncate table {target_dataset}.{target_table}; 
+insert into"""
+        table_operation_suffix = ""
+    elif write_disposition == "WRITE_TRANSIENT":
+        table_operation = f"create or replace"
+        table_operation_suffix = "as"
 
-    sql.append(f"{table_operation} table {target_dataset}.{target_table} {table_operation_suffix} ")
+    sql.append(
+        f"{table_operation} table {target_dataset}.{target_table} {table_operation_suffix} "
+    )
 
     r = create_sql_conditions(logger, wtask)
     tables = r["tables"]
     frm = r["from"]
     where = r["where"]
-    
+
     logger.info(f"{pop_stack()} - create analytic transformations")
 
     # for each analytic provided identify the partition fields, order by
@@ -348,19 +423,19 @@ insert into'''
                 else f'{p["transformation"]}'
             )
         order = ",".join(order_list)
-        
+
         source_name = (
-            analytic['column']["source_name"]
-            if "source_name" in analytic['column'].keys()
+            analytic["column"]["source_name"]
+            if "source_name" in analytic["column"].keys()
             else task["parameters"]["driving_table"]
         )
-        
+
         analytic_transformation = {
-            "name": analytic['column']['name'],
+            "name": analytic["column"]["name"],
             "transformation": f"{analytic['type']}({source_name}.{source_column}{analytic['offset']}{analytic['default']}) over(partition by {partition} order by {order})",
         }
 
-        wtask['parameters']['source_to_target'].append(analytic_transformation)
+        wtask["parameters"]["source_to_target"].append(analytic_transformation)
 
     select = create_sql_select(logger, wtask, tables)
 
@@ -368,8 +443,8 @@ insert into'''
     sql.append("\n".join(frm))
     sql.append("\n".join(where))
     sql.append(";\n")
-    logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100,'-'))
-    return '\n'.join(sql)
+    logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100, "-"))
+    return "\n".join(sql)
 
 
 def create_sql_select(logger: ILogger, task: dict, tables: dict) -> str:
@@ -388,7 +463,7 @@ def create_sql_select(logger: ILogger, task: dict, tables: dict) -> str:
         A string which can be used a the select part of the SQL query.
     """
 
-    logger.info(f"{pop_stack()} - STARTED".center(100,'-'))
+    logger.info(f"{pop_stack()} - STARTED".center(100, "-"))
     logger.debug(
         f"""{pop_stack()} - creating select list from
                                task - {task}"""
@@ -423,13 +498,13 @@ def create_sql_select(logger: ILogger, task: dict, tables: dict) -> str:
                     1 + len(column["name"]),
                 )
             )
-            if 'name' in column.keys() and not column["name"] == source_column
+            if "name" in column.keys() and not column["name"] == source_column
             else ""
         )
 
         select.append(f"{prefix}{source}{alias}")
 
-    logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100,'-'))
+    logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100, "-"))
     return select
 
 
@@ -452,7 +527,7 @@ def create_sql_conditions(logger: ILogger, task: dict) -> dict:
             where: a string containing any where conditions
     """
 
-    logger.info(f"{pop_stack()} - STARTED".center(100,'-'))
+    logger.info(f"{pop_stack()} - STARTED".center(100, "-"))
     tables = {task["parameters"]["driving_table"]: "a"}
     i = 1
     frm = [
@@ -504,7 +579,7 @@ def create_sql_conditions(logger: ILogger, task: dict) -> dict:
 
     outp = {"tables": tables, "from": frm, "where": where}
 
-    logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100,'-'))
+    logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100, "-"))
     return outp
 
 
@@ -520,7 +595,7 @@ def create_sql_where(logger: ILogger, conditions: list, tables: dict = {}) -> st
     returns:
         A string which can be used a the where conditions of the SQL query.
     """
-    logger.info(f"{pop_stack()} - STARTED".center(100,'-'))
+    logger.info(f"{pop_stack()} - STARTED".center(100, "-"))
     logger.debug(
         f"""{pop_stack()} - creating where conditions:)
                                conditions  - {conditions}
@@ -530,10 +605,10 @@ def create_sql_where(logger: ILogger, conditions: list, tables: dict = {}) -> st
     where = []
     for i, condition in enumerate(conditions):
         if i == 0:
-            prefix = " where "  
-        elif 'condition' in condition.keys():
+            prefix = " where "
+        elif "condition" in condition.keys():
             prefix = f"{condition['condition'].rjust(6)} "
-        else: 
+        else:
             prefix = "   and "
 
         left_table_list = condition["fields"][0].split(".")
@@ -554,7 +629,7 @@ def create_sql_where(logger: ILogger, conditions: list, tables: dict = {}) -> st
         right = f"{condition['fields'][1].replace(right_table,f'{tables[right_table] if right_table in tables.keys() else right_table}')}"
         where.append(f"{prefix}{left} {condition['operator']} {right}")
 
-    logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100,'-'))
+    logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100, "-"))
     return where
 
 
@@ -568,7 +643,7 @@ def create_task(logger: ILogger, task: dict) -> str:
     returns:
         A string of python code that can be added to the target file
     """
-    logger.info(f"{pop_stack()} - STARTED".center(100,'-'))
+    logger.info(f"{pop_stack()} - STARTED".center(100, "-"))
     logger.debug(
         f"""{pop_stack()} - creating task {task["task_id"]} from:
                                parameters - {task["parameters"]}"""
@@ -592,5 +667,5 @@ def create_task(logger: ILogger, task: dict) -> str:
         outp.append(f"{key} = {value}")
     outp.append("dag=dag)")
 
-    logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100,'-'))
+    logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100, "-"))
     return ",\n          ".join(outp)
