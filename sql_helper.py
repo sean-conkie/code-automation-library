@@ -119,13 +119,15 @@ def create_type_1_sql(
       A list of strings
     """
     logger.info(f"{pop_stack()} - STARTED".center(100, "-"))
-    sql = [create_table_query(
-                logger,
-                task,
-                target_dataset,
-                task['parameters']['destination_table'],
-                write_disposition
-            )]
+    sql = [
+        create_table_query(
+            logger,
+            task,
+            target_dataset,
+            task["parameters"]["destination_table"],
+            write_disposition,
+        )
+    ]
     logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100, "-"))
     return sql
 
@@ -353,7 +355,10 @@ def create_table_query(
     # we need to create a list of insert columns for insert into statements
     # as we can't run a check on the ordering of the columns in BigQuery to compare
     # to the config.
-    insert_columns = [f"{'       ' if i > 0 else ''}{c['name'] if 'name' in c.keys() else ''}" for i, c in enumerate(wtask['parameters']['source_to_target'])]
+    insert_columns = [
+        f"{'       ' if i > 0 else ''}{c['name'] if 'name' in c.keys() else ''}"
+        for i, c in enumerate(wtask["parameters"]["source_to_target"])
+    ]
     table_operation_suffix = f"({join_char.join(insert_columns)})"
 
     if write_disposition == "WRITE_APPEND":
@@ -420,10 +425,17 @@ insert into"""
             "transformation": f"{analytic['type']}({source_name}.{source_column}{analytic['offset']}{analytic['default']}) over(partition by {partition} order by {order})",
         }
 
-        column_list = [c['name'] if 'name' in c.keys() else '' for c in wtask["parameters"]["source_to_target"]]
-        if analytic_transformation['name'] in column_list:
+        column_list = [
+            c["name"] if "name" in c.keys() else ""
+            for c in wtask["parameters"]["source_to_target"]
+        ]
+        if analytic_transformation["name"] in column_list:
             for i, c in enumerate(wtask["parameters"]["source_to_target"]):
-                if analytic_transformation['name'] == c['name'] if 'name' in c.keys() else '':
+                if (
+                    analytic_transformation["name"] == c["name"]
+                    if "name" in c.keys()
+                    else ""
+                ):
                     wtask["parameters"]["source_to_target"][i] = analytic_transformation
                     break
         else:
