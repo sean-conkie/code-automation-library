@@ -119,28 +119,15 @@ def create_type_1_sql(
       A list of strings
     """
     logger.info(f"{pop_stack()} - STARTED".center(100, "-"))
-    sql = []
-    logger.info(f'{pop_stack()} - set write disposition - "{write_disposition}"')
-    if write_disposition == "WRITE_TRUNCATE":
-        sql.append(
-            f"truncate table {target_dataset}.{task['parameters']['destination_table']};"
+    sql = [
+        create_table_query(
+            logger,
+            task,
+            target_dataset,
+            task["parameters"]["destination_table"],
+            write_disposition,
         )
-
-    sql.append(
-        f"insert into {target_dataset}.{task['parameters']['destination_table']}"
-    )
-
-    r = create_sql_conditions(logger, task)
-    tables = r["tables"]
-    frm = r["from"]
-    where = r["where"]
-
-    select = create_sql_select(logger, task, tables)
-
-    sql.append(",\n".join(select))
-    sql.append("\n".join(frm))
-    sql.append("\n".join(where))
-    sql.append(";\n")
+    ]
     logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100, "-"))
     return sql
 
@@ -187,7 +174,6 @@ def create_type_2_sql(
             task,
             dataset_staging,
             f"{td_table}_p1",
-            dataset_staging,
             "WRITE_TRANSIENT",
             analytics,
         )
@@ -228,7 +214,6 @@ def create_type_2_sql(
             p2_task,
             dataset_staging,
             f"{td_table}_p2",
-            dataset_staging,
             "WRITE_TRANSIENT",
         )
     )
@@ -279,7 +264,6 @@ def create_type_2_sql(
             td_task,
             target_dataset,
             f"{td_table}",
-            dataset_staging,
             write_disposition,
             analytics,
         )
@@ -329,7 +313,6 @@ def create_table_query(
     task: dict,
     target_dataset: str,
     target_table: str,
-    dataset_staging: str,
     write_disposition: str,
     analytics: list = [],
 ) -> str:
@@ -341,7 +324,6 @@ def create_table_query(
       task (dict): the task dictionary
       target_dataset (str): The dataset where the target table resides.
       target_table (str): The name of the table to be created.
-      dataset_staging (str): the name of the staging dataset
       write_disposition (str): This is the write disposition for the query. It can be WRITE_TRUNCATE,
     WRITE_APPEND, WRITE_EMPTY, WRITE_TRANSIENT.
       analytics (list): list = []) -> str: list of analytic dict objects
@@ -369,13 +351,21 @@ def create_table_query(
     if "where" in task["parameters"].keys():
         wtask["parameters"]["where"] = [w for w in task["parameters"]["where"]]
 
+    join_char = ",\n"
+    # we need to create a list of insert columns for insert into statements
+    # as we can't run a check on the ordering of the columns in BigQuery to compare
+    # to the config.
+    insert_columns = [
+        f"{'       ' if i > 0 else ''}{c['name'] if 'name' in c.keys() else ''}"
+        for i, c in enumerate(wtask["parameters"]["source_to_target"])
+    ]
+    table_operation_suffix = f"({join_char.join(insert_columns)})"
+
     if write_disposition == "WRITE_APPEND":
         table_operation = "insert into"
-        table_operation_suffix = ""
     elif write_disposition == "WRITE_TRUNCATE":
         table_operation = f"""truncate table {target_dataset}.{target_table}; 
 insert into"""
-        table_operation_suffix = ""
     elif write_disposition == "WRITE_TRANSIENT":
         table_operation = f"create or replace"
         table_operation_suffix = "as"
@@ -435,13 +425,27 @@ insert into"""
             "transformation": f"{analytic['type']}({source_name}.{source_column}{analytic['offset']}{analytic['default']}) over(partition by {partition} order by {order})",
         }
 
-        wtask["parameters"]["source_to_target"].append(analytic_transformation)
+        column_list = [
+            c["name"] if "name" in c.keys() else ""
+            for c in wtask["parameters"]["source_to_target"]
+        ]
+        if analytic_transformation["name"] in column_list:
+            for i, c in enumerate(wtask["parameters"]["source_to_target"]):
+                if (
+                    analytic_transformation["name"] == c["name"]
+                    if "name" in c.keys()
+                    else ""
+                ):
+                    wtask["parameters"]["source_to_target"][i] = analytic_transformation
+                    break
+        else:
+            wtask["parameters"]["source_to_target"].append(analytic_transformation)
 
     select = create_sql_select(logger, wtask, tables)
     query_list = [",\n".join(select), "\n".join(frm), "\n".join(where), ";\n"]
 
     sql.append("\n".join(query_list))
-    outp = "\n".join(query_list)
+    outp = "\n".join(sql)
     logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100, "-"))
     return outp
 
