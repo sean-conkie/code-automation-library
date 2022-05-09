@@ -119,8 +119,11 @@ if __name__ == "__main__":
     logger = ILogger("Config Validate", level=known_args.level)
 
     try:
-        main(logger, known_args)
+        result = main(logger, known_args)
     except:
         logger.error(f"{traceback.format_exc():}")
         logger.debug(f"{sys.exc_info()[1]:}")
         logger.info(f"Config Validate FAILED".center(100, "-"))
+
+    if result != 0:
+        raise Exception("Exiting with errors found!")
