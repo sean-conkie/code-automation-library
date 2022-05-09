@@ -4,7 +4,18 @@ from datetime import datetime, timedelta
 from jinja2 import Environment, FileSystemLoader
 from lib.logger import ILogger, pop_stack
 
-__all__ = ['create_sql_file', 'create_sql', 'create_type_1_sql', 'create_type_2_sql', 'create_type_2_analytic_list', 'create_table_query', 'create_sql_select', 'create_sql_conditions','create_sql_where']
+__all__ = [
+    "create_sql_file",
+    "create_sql",
+    "create_type_1_sql",
+    "create_type_2_sql",
+    "create_type_2_analytic_list",
+    "create_table_query",
+    "create_sql_select",
+    "create_sql_conditions",
+    "create_sql_where",
+]
+
 
 def create_sql_file(
     logger: ILogger,

@@ -1,7 +1,7 @@
 import inspect
 import os
 
-__all__ = ['ILogger', 'pop_stack']
+__all__ = ["ILogger", "pop_stack"]
 
 from logging import Logger, NOTSET, Formatter, FileHandler, StreamHandler
 
