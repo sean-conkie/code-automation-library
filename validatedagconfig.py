@@ -23,7 +23,7 @@ def main(logger: ILogger, args: argparse.Namespace):
       The exit code of the program.
     """
 
-    logger.info(f"validate config STARTED".center(100, "-"))
+    logger.info(f"Config Validate STARTED".center(100, "-"))
     if args.config_directory:
         # create a list of config files using the source directory (args.config_directory)
         dpath = os.path.normpath(args.config_directory)
@@ -38,7 +38,7 @@ def main(logger: ILogger, args: argparse.Namespace):
                     config_list.append(p)
         except:
             logger.error(f"{pop_stack()} - {sys.exc_info()[0]:}")
-            logger.info(f"{pop_stack()} - dag files FAILED")
+            logger.info(f"{pop_stack()} - Config Validate FAILED")
             return 1
 
     elif args.config_list:
@@ -88,7 +88,7 @@ def main(logger: ILogger, args: argparse.Namespace):
             f"{pop_stack()} - One or more files have failed validation, check logs for more information."
         )
 
-    logger.info(f"validate config COMPLETED SUCCESSFULLY".center(100, "-"))
+    logger.info(f"Config Validate COMPLETED SUCCESSFULLY".center(100, "-"))
     return exit_code
 
 
@@ -116,11 +116,11 @@ if __name__ == "__main__":
 
     known_args, args = parser.parse_known_args()
 
-    logger = ILogger("JSON Validate", level=known_args.level)
+    logger = ILogger("Config Validate", level=known_args.level)
 
     try:
         main(logger, known_args)
     except:
         logger.error(f"{traceback.format_exc():}")
         logger.debug(f"{sys.exc_info()[1]:}")
-        logger.info(f"dag files FAILED".center(100, "-"))
+        logger.info(f"Config Validate FAILED".center(100, "-"))

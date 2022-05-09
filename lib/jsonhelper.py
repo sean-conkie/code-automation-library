@@ -50,6 +50,8 @@ def get_json(logger: ILogger, path: str) -> dict:
         logger.warning(f"{pop_stack()} - File {path:} does not exist.")
         return {}
 
+    logger.debug(f"{pop_stack()} - File input {path:}.")
+
     try:
         # identify what path is; dir, file
         if os.path.isdir(os.path.normpath(path)) or not os.path.exists(
