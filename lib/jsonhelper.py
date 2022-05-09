@@ -58,12 +58,12 @@ def get_json(logger: ILogger, path: str) -> dict:
             raise FileExistsError
     except (FileNotFoundError, FileExistsError) as e:
         logger.error(f"{pop_stack()} - File {path:} does not exist.")
-        logger.info(f"{pop_stack()} - FAILED")
-        return
+        logger.info(f"{pop_stack()} - FAILED".center(100, "-"))
+        return None
     except:
         logger.error(f"{sys.exc_info()[0]:}")
-        logger.info(f"{pop_stack()} - FAILED")
-        return
+        logger.info(f"{pop_stack()} - FAILED".center(100, "-"))
+        return None
 
     # read file
     try:
@@ -75,5 +75,5 @@ def get_json(logger: ILogger, path: str) -> dict:
         return json.loads(filecontent)
     except:
         logger.error(f"{pop_stack()} - {sys.exc_info()[0]:}")
-        logger.info(f"{pop_stack()} - FAILED")
-        return
+        logger.info(f"{pop_stack()} - FAILED".center(100, "-"))
+        return None
