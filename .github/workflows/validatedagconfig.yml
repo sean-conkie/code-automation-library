@@ -34,6 +34,6 @@ jobs:
       # Run JSON Validate against code base #
       #######################################
       - name: Validate JSON
-        uses: .github/actions/validatedagconfig
+        uses: /.github/actions/validatedagconfig
         id: check
       
