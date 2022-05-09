@@ -69,7 +69,7 @@ def main(logger: ILogger, args: argparse.Namespace):
             for t in config["tasks"]:
                 if t["operator"] == "CreateTable":
                     task_schema = get_json(
-                        logger, "cfg\dag\dag_cfg_createtable_task_schema.json"
+                        logger, ".\cfg\dag\dag_cfg_createtable_task_schema.json"
                     )
                     task_check_result = IJSONValidate(logger, schema, config)
                     if not task_check_result:
