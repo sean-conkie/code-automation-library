@@ -1,0 +1,367 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema",
+  "$id": "dag_cfg_schema.json",
+  "type": "object",
+  "title": "Defines the desired task",
+  "required": [
+    "task_id",
+    "operator",
+    "parameters",
+    "dependencies"
+  ],
+  "properties": {
+    "task_id": {
+      "type": "string",
+      "title": "The task_id",
+      "examples": [
+        "dim_offer_type"
+      ]
+    },
+    "operator": {
+      "type": "string",
+      "title": "The name of the target operator, can be any standard operator or custom operator.",
+      "examples": [
+        "CreateTable",
+        "BigQueryOperator"
+      ]
+    },
+    "parameters": {
+      "type": "object",
+      "title": "Operator parameters, each operator will have it's own list of required parameters.",
+      "properties": {
+        "destination_table": {
+          "type": "string",
+          "title": "The destination_table",
+          "examples": [
+            "dim_offer_type"
+          ]
+        },
+        "target_type": {
+          "type": "number",
+          "title": "The SCD type of the target schema.",
+          "examples": [
+            1,
+            2
+          ]
+        },
+        "driving_table": {
+          "type": "string",
+          "title": "The driving table for the transformation.",
+          "examples": [
+            "uk_tds_refdata_eod_is.cc_refdata_bsboffertooffertype"
+          ]
+        },
+        "joins": {
+          "type": "array",
+          "title": "Defines the joins required for the transformation",
+          "items": {
+            "type": "object",
+            "title": "A Schema",
+            "required": [
+              "right",
+              "on"
+            ],
+            "properties": {
+              "left": {
+                "type": "string",
+                "title": "(Optional) The left hand table in the join",
+                "examples": [
+                  "uk_tds_refdata_eod_is.cc_refdata_bsboffertype"
+                ]
+              },
+              "right": {
+                "type": "string",
+                "title": "The right hand table in the join",
+                "examples": [
+                  "uk_tds_refdata_eod_is.cc_refdata_bsboffertype"
+                ]
+              },
+              "on": {
+                "type": "array",
+                "title": "The join conditions",
+                "items": {
+                  "type": "object",
+                  "title": "A join condition",
+                  "required": [
+                    "operator",
+                    "fields"
+                  ],
+                  "properties": {
+                    "operator": {
+                      "type": "string",
+                      "title": "The operator",
+                      "examples": [
+                        "="
+                      ]
+                    },
+                    "fields": {
+                      "type": "array",
+                      "title": "The fields or values to be compared - only the first two items in the array are used.",
+                      "items": {
+                        "type": "string",
+                        "title": "A field or value"
+                      }
+                    }
+                  },
+                  "examples": [{
+                    "operator": "=",
+                    "fields": [
+                      "uk_tds_refdata_eod_is.cc_refdata_bsboffertooffertype.offertypeid",
+                      "uk_tds_refdata_eod_is.cc_refdata_bsboffertype.id"
+                    ]
+                  }]
+                }
+              }
+            },
+            "examples": [{
+              "right": "uk_tds_refdata_eod_is.cc_refdata_bsboffertype",
+              "on": [{
+                  "operator": "=",
+                  "fields": [
+                    "uk_tds_refdata_eod_is.cc_refdata_bsboffertooffertype.offertypeid",
+                    "uk_tds_refdata_eod_is.cc_refdata_bsboffertype.id"
+                  ]
+                },
+                {
+                  "operator": "!=",
+                  "fields": [
+                    "uk_tds_refdata_eod_is.cc_refdata_bsboffertype.rdmaction",
+                    "'D'"
+                  ]
+                }
+              ]
+            }]
+          }
+        },
+        "source_to_target": {
+          "type": "array",
+          "title": "The source to target of the desired table",
+          "items": {
+            "type": "object",
+            "title": "Represents each column",
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "title": "The target column name"
+              },
+              "source_column": {
+                "type": "string",
+                "title": "(Conditional - source_column OR transformation) The source column name"
+              },
+              "transformation": {
+                "type": "string",
+                "title": "(Conditional - source_column OR transformation) Defines the transformation of the column, not including joins.",
+                "examples": [
+                  "current_timestamp()",
+                  "ifnull(uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer.statuschangeddate,uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer.effective_from_dt)",
+                  "abs(uk_tds_chordiant_eod_is.cc_chordiant_bsbpriceableunit.quotedprice)"
+                ]
+              },
+              "source_name": {
+                "type": "string",
+                "title": "(Optional) The source table name - defaults to driving_table"
+              }
+            },
+            "examples": [{
+                "name": "code",
+                "source_name": "uk_tds_refdata_eod_is.cc_refdata_bsboffertype",
+                "source_column": "code"
+              },
+              {
+                "name": "effective_from_dt",
+                "transformation": "ifnull(uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer.statuschangeddate,uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer.effective_from_dt)"
+              }
+            ]
+          }
+        },
+        "where": {
+          "type": "array",
+          "title": "Defines the where conditions for the transformation",
+          "items": {
+            "type": "object",
+            "title": "A condition",
+            "required": [
+              "operator",
+              "fields"
+            ],
+            "items": {
+              "type": "object",
+              "title": "A condition",
+              "required": [
+                "operator",
+                "fields"
+              ],
+              "properties": {
+                "operator": {
+                  "type": "string",
+                  "title": "The operator",
+                  "examples": [
+                    "="
+                  ]
+                },
+                "fields": {
+                  "type": "array",
+                  "title": "The fields or values to be compared - only the first two items in the array are used.",
+                  "items": {
+                    "type": "string",
+                    "title": "A field or value"
+                  }
+                }
+              },
+              "examples": [{
+                "operator": "=",
+                "fields": [
+                  "uk_tds_refdata_eod_is.cc_refdata_bsboffertooffertype.offertypeid",
+                  "uk_tds_refdata_eod_is.cc_refdata_bsboffertype.id"
+                ]
+              }]
+            }
+          }
+        }
+      },
+      "write_disposition": {
+        "type": "string",
+        "title": "The write disposition of the table",
+        "examples": [
+          "WRITE_TRUNCATE",
+          "WRITE_APPEND"
+        ]
+      },
+      "destination_dataset": {
+        "type": "string",
+        "title": "The destination dataset for the table",
+        "examples": [
+          "uk_pre_customer_spine_offer_is"
+        ]
+      },
+      "history": {
+        "type": "object",
+        "default": {},
+        "title": "Defines fields used to generate a history table",
+        "required": [
+          "partition",
+          "driving_column",
+          "order"
+        ],
+        "properties": {
+          "partition": {
+            "type": "array",
+            "default": [],
+            "title": "The partition to be used",
+            "items": {
+              "type": "object",
+              "default": {},
+              "title": "A field in the partition",
+              "required": [
+                "source_column"
+              ],
+              "properties": {
+                "source_column": {
+                  "type": "string",
+                  "default": "",
+                  "title": "The source column"
+                },
+                "source_name": {
+                  "type": "string",
+                  "default": "",
+                  "title": "(Optional) The source table name, defaults to driving table."
+                }
+              }
+            }
+          },
+          "driving_column": {
+            "type": "array",
+            "default": [],
+            "title": "(Optional) The column to be part of the lag/lead",
+            "items": {
+              "type": "object",
+              "title": "A column",
+              "required": [
+                "name",
+                "source_column"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "title": "The target name of the analycit result"
+                },
+                "source_column": {
+                  "type": "string",
+                  "title": "The source column"
+                },
+                "source_name": {
+                  "type": "string",
+                  "title": "(Optional) The source table name, driving table used as default"
+                }
+              }
+            }
+          },
+          "order": {
+            "type": "array",
+            "default": [],
+            "title": "The order by for the analytic",
+            "items": {
+              "type": "object",
+              "title": "A column - can be a column or transformation",
+              "properties": {
+                "transformation": {
+                  "type": "string",
+                  "default": "",
+                  "title": "(Optional) A transformation for use in the order by, fully qualify any table statements.",
+                  "examples": [
+                    "ifnull(uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer.statuschangeddate,uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer.effective_from_dt)"
+                  ]
+                },
+                "source_column": {
+                  "type": "string",
+                  "title": "(Optional) The source column"
+                },
+                "source_name": {
+                  "type": "string",
+                  "title": "(Optional) The source table name, driving table used as default"
+                }
+              },
+              "examples": [{
+                  "transformation": "ifnull(uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer.statuschangeddate,uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer.effective_from_dt)"
+                },
+                {
+                  "source_column": "effective_from_dt_csn_seq"
+                },
+                {
+                  "source_column": "effective_from_dt_seq"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "sql": {
+        "type": "string",
+        "title": "A sql statement to be executed or link to sql file.",
+        "examples": [
+          "sql/spine_offer_td_offer_priceable_unit_soip.sql",
+          "truncate table uk_pub_customer_spine_offer_is.dim_offer_priceable_unit;"
+        ]
+      },
+      "destination_dataset_table": {
+        "type": "string",
+        "title": "The destination dataset for the target table",
+        "examples": [
+          ""
+        ]
+      }
+    },
+    "dependencies": {
+      "type": "array",
+      "default": [],
+      "title": "The dependencies of the task",
+      "items": {
+        "type": "string",
+        "title": "A task within the same DAG or another DAG (specified <dag name>.<task id>)"
+      }
+    }
+  }
+}
