@@ -45,6 +45,6 @@ jobs:
       # Run JSON Validate against commit #
       ####################################
       - name: Validate JSON
-        run: python validatedagconfig.py --config_directory=cfg/dag/
+        run: python validatedagconfig.py --config_directory=./cfg/dag/
 
       

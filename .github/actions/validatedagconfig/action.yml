@@ -1,7 +1,0 @@
----
-name: 'Validate-DAG-Config'
-author: 'Sean Conkie'
-description: 'Runs validatedagconfig.py against changed config files.'
-runs:
-  using: 'docker'
-  image: 'Dockerfile
