@@ -2,7 +2,19 @@ import re
 
 from datetime import datetime, timedelta
 from jinja2 import Environment, FileSystemLoader
-from logger import ILogger, pop_stack
+from lib.logger import ILogger, pop_stack
+
+__all__ = [
+    "create_sql_file",
+    "create_sql",
+    "create_type_1_sql",
+    "create_type_2_sql",
+    "create_type_2_analytic_list",
+    "create_table_query",
+    "create_sql_select",
+    "create_sql_conditions",
+    "create_sql_where",
+]
 
 
 def create_sql_file(
@@ -299,7 +311,7 @@ def create_type_2_analytic_list(logger: ILogger, task: dict) -> list:
             },
             "partition": history["partition"],
             "order": history["order"],
-            "offset": ", 1",
+            "offset": 1,
             "default": "",
         }
         outp.append(analytic)
@@ -419,10 +431,13 @@ insert into"""
             if "source_name" in analytic["column"].keys()
             else task["parameters"]["driving_table"]
         )
-
+        offset = "" if not "offset" in analytic.keys() else f", {analytic['offset']}"
+        default = "" if not "default" in analytic.keys() else f", {analytic['default']}"
         analytic_transformation = {
             "name": analytic["column"]["name"],
-            "transformation": f"{analytic['type']}({source_name}.{source_column}{analytic['offset']}{analytic['default']}) over(partition by {partition} order by {order})",
+            "transformation": f"""{analytic['type']}({source_name}.{source_column}{offset}{default}) 
+            over(partition by {partition} 
+                     order by {order})""",
         }
 
         column_list = [
@@ -634,41 +649,3 @@ def create_sql_where(logger: ILogger, conditions: list, tables: dict = {}) -> st
 
     logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100, "-"))
     return where
-
-
-def create_task(logger: ILogger, task: dict) -> str:
-    """Method for generating a string of python that defines a task.
-
-    args:
-        task: A dictionary representing a task to be added to the DAG.  Used to
-              task parameter string
-
-    returns:
-        A string of python code that can be added to the target file
-    """
-    logger.info(f"{pop_stack()} - STARTED".center(100, "-"))
-    logger.debug(
-        f"""{pop_stack()} - creating task {task["task_id"]} from:
-                               parameters - {task["parameters"]}"""
-    )
-
-    outp = [f"{task['task_id']} = {task['operator']}(task_id='{task['task_id']}'"]
-
-    # for each key:value pair in the tark parameters we perform checks based on
-    # parameter type and create a value that can be appended to the string
-    for key in task["parameters"].keys():
-        if (
-            type(task["parameters"][key]) == int
-            or type(task["parameters"][key]) == bool
-        ):
-            value = task["parameters"][key]
-        elif type(task["parameters"][key]) == str:
-            value = f"f'''{task['parameters'][key]}'''"
-        else:
-            value = f"{task['parameters'][key]}"
-
-        outp.append(f"{key} = {value}")
-    outp.append("dag=dag)")
-
-    logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100, "-"))
-    return ",\n          ".join(outp)

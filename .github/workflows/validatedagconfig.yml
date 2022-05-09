@@ -1,0 +1,50 @@
+---
+name: Validate DAG Config
+
+#############################
+# Start the job on all push #
+#############################
+on:
+  push:
+    branches-ignore: [master, main]
+    # Remove the line above to run when pushing to master
+  pull_request:
+    branches: [master, main]
+
+###############
+# Set the Job #
+###############
+jobs:
+  build:
+    name: Validate DAG Config
+    runs-on: ubuntu-latest
+
+    ##################
+    # Load all steps #
+    ##################
+    steps:
+      ##########################
+      # Checkout the code base #
+      ##########################
+      - name: Checkout Code
+        uses: actions/checkout@v3
+        # with:
+        #   fetch-depth: 0
+      ##################
+      # install python #
+      ##################
+      - name: Install Python
+        uses: actions/setup-python@v3
+        with:
+          python-version: '3.x' # Version range or exact version of a Python version to use, using SemVer's version range syntax
+          architecture: 'x64' # optional x64 or x86. Defaults to x64 if not specified
+
+      - name: Install Python Requirements
+        run: pip install -r .github/workflows/dependencies/validatedagconfig.txt
+      ####################################
+      # Run JSON Validate against commit #
+      ####################################
+      - name: Validate Config
+        run: python validatedagconfig.py --config_directory=cfg/dag/
+
+      

@@ -1,6 +1,8 @@
 import inspect
 import os
 
+__all__ = ["ILogger", "pop_stack"]
+
 from logging import Logger, NOTSET, Formatter, FileHandler, StreamHandler
 
 # It creates a logger object with the given name and level
@@ -19,16 +21,16 @@ class ILogger(Logger):
           The return value is the exit code of the function.
         """
         Logger.__init__(self, name, level)
-        formatter = Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-
-        if file:
-            fileHandler = FileHandler(file, mode="a")
-            fileHandler.setFormatter(formatter)
+        formatter = Formatter("%(asctime)s - %(name)s - [%(levelname)s] - %(message)s")
 
         streamHandler = StreamHandler()
         streamHandler.setFormatter(formatter)
 
-        self.addHandler(fileHandler)
+        if file:
+            fileHandler = FileHandler(file, mode="a")
+            fileHandler.setFormatter(formatter)
+            self.addHandler(fileHandler)
+
         self.addHandler(streamHandler)
 
 

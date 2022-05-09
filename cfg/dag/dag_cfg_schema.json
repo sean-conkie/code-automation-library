@@ -1,0 +1,187 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema",
+    "$id": "dag_cfg_schema.json",
+    "type": "object",
+    "default": {},
+    "title": "Root Schema",
+    "required": [
+        "name",
+        "dag",
+        "args",
+        "properties",
+        "imports",
+        "tasks"
+    ],
+    "properties": {
+        "name": {
+            "type": "string",
+            "default": "",
+            "title": "The name of the DAG",
+            "examples": [
+                "GCP_SPINE_OFFER"
+            ]
+        },
+        "dag": {
+            "type": "object",
+            "default": {},
+            "title": "Describes the dag",
+            "required": [
+                "description",
+                "tags"
+            ],
+            "properties": {
+                "description": {
+                    "type": "string",
+                    "default": "",
+                    "title": "The description for the DAG to be shown on the webserver",
+                    "examples": [
+                        "Populates portfolio offer tables uk_pub_customer_spine_offer_is"
+                    ]
+                },
+                "tags": {
+                    "type": "array",
+                    "default": [],
+                    "title": "List of tags to help filtering DAGs in the UI.",
+                    "items": {
+                        "type": "string",
+                        "title": "A tag",
+                        "examples": [
+                            "offer"
+                        ]
+                    }
+                }
+            }
+        },
+        "args": {
+            "type": "object",
+            "default": {},
+            "title": "A dictionary of default parameters to be used as constructor keyword parameters when initialising operators.",
+            "required": [
+                "owner"
+            ],
+            "properties": {
+                "owner": {
+                    "type": "string",
+                    "default": "",
+                    "title": "The owner of the DAG - should be the service account used to execute jobs (this will not actually be used to execute jobs)",
+                    "examples": [
+                        "customerbtprod"
+                    ]
+                },
+                "email": {
+                    "type": "array",
+                    "default": [],
+                    "title": "(Optional) A list of email addresses for Airflow to contact on task failure or retry.",
+                    "items": {
+                        "type": "string",
+                        "default": "",
+                        "title": "An email address",
+                        "examples": [
+                            "sean.conkie@sky.uk"
+                        ]
+                    }
+                }
+            },
+            "email_on_failure": {
+                "type": "boolean",
+                "default": [false],
+                "title": "(Optional) Email on failure of a task flag."
+            },
+            "email_on_retry": {
+                "type": "boolean",
+                "default": [false],
+                "title": "(Optional) Email on retry of a task flag."
+            },
+            "retries": {
+                "type": "number",
+                "default": [5],
+                "title": "(Optional) Maximum number of retries for a task."
+            },
+            "retry_delay": {
+                "type": "number",
+                "default": [60],
+                "title": "(Optional) The time between each retry, supplied as a number of seconds."
+            },
+            "on_failure_callback": {
+                "type": "string",
+                "default": "",
+                "title": "(Optional) Invoked when the task fails. Default value for all tasks."
+            },
+            "on_success_callback": {
+                "type": "string",
+                "default": "",
+                "title": "(Optional) Invoked when the task succeeds. Default value for all tasks."
+            },
+            "on_retry_callback": {
+                "type": "string",
+                "default": "",
+                "title": "(Optional) Invoked when the task is up for retry. Default value for all tasks."
+            },
+            "sla_miss_callback": {
+                "type": "string",
+                "default": "",
+                "title": "(Optional) Invoked when a task misses its defined SLA. Default value for all tasks"
+            },
+            "trigger_rule": {
+                "type": "string",
+                "default": "all_success",
+                "title": "(Optional) Defines what triggers a task. Default 'all_success' requires all dependencies before triggering a task.",
+                "examples": [
+                    "all_success",
+                    "all_failed",
+                    "all_done",
+                    "one_failed",
+                    "one_success",
+                    "none_failed",
+                    "none_skipped",
+                    "none_failed_min_one_success"
+                ]
+            }
+        },
+        "properties": {
+            "type": "object",
+            "default": {},
+            "title": "Allows properties to be passed to target python file.",
+            "required": [
+                "dataset_staging",
+                "dataset_publish"
+            ],
+            "properties": {
+                "dataset_staging": {
+                    "type": "string",
+                    "default": "",
+                    "title": "The staging dataset",
+                    "examples": [
+                        "uk_pre_customer_spine_offer_is"
+                    ]
+                },
+                "dataset_publish": {
+                    "type": "string",
+                    "default": "",
+                    "title": "The publish dataset",
+                    "examples": [
+                        "uk_pub_customer_spine_offer_is"
+                    ]
+                }
+            }
+        },
+        "imports": {
+            "type": "array",
+            "default": [],
+            "title": "Allows required packages to be pushed to target python file.",
+            "items": {
+                "type": "string",
+                "default": "",
+                "title": "A python package",
+                "examples": [
+                    "jinja2"
+                ]
+            }
+        },
+        "tasks": {
+            "type": "array",
+            "default": [],
+            "title": "A list of tasks to be created in the target DAG"
+        }
+    }
+}

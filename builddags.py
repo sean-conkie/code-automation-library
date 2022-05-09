@@ -5,10 +5,11 @@ import re
 import sys
 import traceback
 
-from datetime import datetime, timedelta
+from datetime import datetime
 from jinja2 import Environment, FileSystemLoader
-from logger import ILogger, pop_stack
-from sql_helper import *
+from lib.jsonhelper import get_json
+from lib.logger import ILogger, pop_stack
+from lib.sql_helper import create_sql_file
 
 
 def main(logger: ILogger, args: argparse.Namespace) -> int:
@@ -56,7 +57,7 @@ def main(logger: ILogger, args: argparse.Namespace) -> int:
     # the python statements needed to be inserted into the template
     for config in config_list:
         path = config if os.path.exists(config) else f"{dpath}{config}"
-        cfg = get_config(logger, path)
+        cfg = get_json(logger, path)
         logger.info(f"{pop_stack()} - building dag - {cfg['name']}")
 
         dag_string = create_dag_string(logger, cfg["name"], cfg["dag"])
@@ -343,50 +344,6 @@ def create_dag_args(logger: ILogger, args: dict) -> str:
 
     logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100, "-"))
     return outp
-
-
-def get_config(logger: ILogger, path: str) -> dict:
-    """
-    This function takes a path to a config file and returns a
-    dictionary object
-
-    Args:
-      path: The path to the config file you want to read.
-
-    Returns:
-      A dictionary object
-    """
-
-    logger.info(f"{pop_stack()} - STARTED".center(100, "-"))
-    if not path:
-        logger.warning(f"{pop_stack()} - File {path:} does not exist.")
-        return {}
-
-    try:
-        # identify what path is; dir, file
-        if os.path.isdir(path) or not os.path.exists(path):
-            raise FileExistsError
-    except (FileNotFoundError, FileExistsError) as e:
-        logger.error(f"{pop_stack()} - File {path:} does not exist.")
-        logger.info(f"{pop_stack()} - FAILED")
-        return
-    except:
-        logger.error(f"{sys.exc_info()[0]:}")
-        logger.info(f"{pop_stack()} - FAILED")
-        return
-
-    # read file
-    try:
-        with open(path, "r") as sourcefile:
-            filecontent = sourcefile.read()
-
-        # return file
-        logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100, "-"))
-        return json.loads(filecontent)
-    except:
-        logger.error(f"{pop_stack()} - {sys.exc_info()[0]:}")
-        logger.info(f"{pop_stack()} - FAILED")
-        return
 
 
 if __name__ == "__main__":
