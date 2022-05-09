@@ -6,12 +6,13 @@ import traceback
 
 from lib.logger import ILogger, pop_stack
 
-__all__ = ['IJSONValidate', 'get_config']
+__all__ = ["IJSONValidate", "get_config"]
+
 
 def IJSONValidate(logger: ILogger, schema: dict, object: dict) -> bool:
     """
     > This function validates a JSON object against a JSON schema
-    
+
     Args:
       logger (ILogger): ILogger - this is the logger object that you can use to log messages.
       schema (dict): The schema to validate against.
@@ -26,10 +27,11 @@ def IJSONValidate(logger: ILogger, schema: dict, object: dict) -> bool:
         logger.debug(f"{sys.exc_info()[1]:}")
         logger.info(f"{pop_stack()} - Schema not matching")
         logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100, "-"))
-        return False        
+        return False
     logger.info(f"{pop_stack()} - Schema matching")
     logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100, "-"))
     return True
+
 
 def get_json(logger: ILogger, path: str) -> dict:
     """
@@ -50,7 +52,9 @@ def get_json(logger: ILogger, path: str) -> dict:
 
     try:
         # identify what path is; dir, file
-        if os.path.isdir(path) or not os.path.exists(path):
+        if os.path.isdir(os.path.normpath(path)) or not os.path.exists(
+            os.path.normpath(path)
+        ):
             raise FileExistsError
     except (FileNotFoundError, FileExistsError) as e:
         logger.error(f"{pop_stack()} - File {path:} does not exist.")

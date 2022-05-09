@@ -1,5 +1,6 @@
 import argparse
 import json
+from logging import raiseExceptions
 import os
 import re
 import sys
@@ -51,7 +52,13 @@ def main(logger: ILogger, args: argparse.Namespace):
         cpath = c.strip()
         logger.info(f"{pop_stack()} - validating file: {cpath}")
         config = get_json(logger, cpath)
-        schema = get_json(logger, ".cfg\dag\dag_cfg_schema.json")
+        if not config:
+            raise FileNotFoundError(f"{cpath} not found.")
+
+        schema = get_json(logger, ".\cfg\dag\dag_cfg_schema.json")
+        if not schema:
+            raise FileNotFoundError(f"{cpath} not found.")
+
         logger.info(f"{pop_stack()} - validate schema object")
         result = IJSONValidate(logger, schema, config)
         if not result:
