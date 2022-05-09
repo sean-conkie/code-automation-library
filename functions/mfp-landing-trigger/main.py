@@ -1,11 +1,9 @@
 import json
 import os
 import re
-import sys
 
 from google.cloud import storage
 from datetime import datetime
-from os import environ, path
 from trigger_dag import trigger_dag
 
 # local_folder = path.dirname(path.abspath(__file__))

@@ -1,5 +1,4 @@
 from airflow import DAG
-from airflow.contrib.operators.bigquery_operator import BigQueryOperator
 from airflow.operators.dummy_operator import DummyOperator
 from datetime import datetime, timedelta
 from airflow.contrib.operators.gcs_to_bq import GoogleCloudStorageToBigQueryOperator

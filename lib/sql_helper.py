@@ -1,6 +1,6 @@
 import re
 
-from datetime import datetime, timedelta
+from datetime import datetime
 from jinja2 import Environment, FileSystemLoader
 from lib.logger import ILogger, pop_stack
 
@@ -585,9 +585,6 @@ def create_sql_conditions(logger: ILogger, task: dict) -> dict:
                 frm.append(
                     f"{prefix}{on_prefix}{left} {condition['operator']} {right}{on_suffix}"
                 )
-    else:
-        left_table = task["parameters"]["driving_table"]
-        right_table = ""
 
     where = (
         create_sql_where(logger, task["parameters"]["where"], tables)

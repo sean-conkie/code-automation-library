@@ -4,7 +4,6 @@ from airflow.operators.dummy_operator import DummyOperator
 from datetime import datetime, timedelta
 from airflow.contrib.operators.gcs_to_bq import GoogleCloudStorageToBigQueryOperator
 from airflow.contrib.operators.bigquery_check_operator import BigQueryCheckOperator
-from airflow.providers.google.cloud.transfers.gcs_to_gcs import GCSToGCSOperator
 
 default_args = {
     "owner": "Sean Conkie",

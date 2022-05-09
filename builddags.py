@@ -38,20 +38,15 @@ def main(logger: ILogger, args: argparse.Namespace) -> int:
 
     # create a list of config files using the source directory (dpath), if the
     # path provided is a file add id otherwise append each filename in directory
-    try:
-        logger.info(f"{pop_stack()} - creating config list")
-        if not os.path.isdir(dpath) and os.path.exists(dpath):
-            config_list.append(dpath)
-        else:
-            for filename in os.listdir(dpath):
-                logger.debug(f"filename: {filename}")
-                m = re.search(r"^cfg_.*\.json$", filename, re.IGNORECASE)
-                if m:
-                    config_list.append(filename)
-    except:
-        logger.error(f"{pop_stack()} - {sys.exc_info()[0]:}")
-        logger.info(f"{pop_stack()} - dag files FAILED")
-        return 1
+    logger.info(f"{pop_stack()} - creating config list")
+    if not os.path.isdir(dpath) and os.path.exists(dpath):
+        config_list.append(dpath)
+    else:
+        for filename in os.listdir(dpath):
+            logger.debug(f"filename: {filename}")
+            m = re.search(r"^cfg_.*\.json$", filename, re.IGNORECASE)
+            if m:
+                config_list.append(filename)
 
     # for each config file identified use the content of the JSON to create
     # the python statements needed to be inserted into the template
