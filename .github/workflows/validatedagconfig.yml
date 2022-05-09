@@ -44,7 +44,12 @@ jobs:
       ####################################
       # Run JSON Validate against commit #
       ####################################
-      - name: Validate JSON
-        run: python validatedagconfig.py --config_directory=cfg/dag/
+      - name: Validate Config
+        run: |
+          output=$(python validatedagconfig.py --config_directory=cfg/dag/)
+          echo "::set-output name=status::$output
+        id: check
+      - name: Set exit code
+        run: exit ${{ steps.check.outputs.status }}
 
       

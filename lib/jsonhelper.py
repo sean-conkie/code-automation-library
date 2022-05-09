@@ -25,7 +25,7 @@ def IJSONValidate(logger: ILogger, schema: dict, object: dict) -> bool:
         validate(object)
     except fastjsonschema.JsonSchemaValueException as e:
         logger.debug(f"{sys.exc_info()[1]:}")
-        logger.info(f"{pop_stack()} - Schema not matching")
+        logger.error(f"{pop_stack()} - Schema not matching")
         logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100, "-"))
         return False
     logger.info(f"{pop_stack()} - Schema matching")
