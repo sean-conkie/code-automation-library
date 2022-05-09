@@ -11,18 +11,30 @@ from lib.logger import ILogger, pop_stack
 
 
 def main(logger: ILogger, args: argparse.Namespace):
+    """
+    This function validates the config file(s) against a schema
+
+    Args:
+      logger (ILogger): ILogger - this is the logger object that is passed to the function.
+      args (argparse.Namespace): argparse.Namespace
+
+    Returns:
+      The exit code of the program.
+    """
 
     logger.info(f"validate config STARTED".center(100, "-"))
     if args.config_directory:
         # create a list of config files using the source directory (args.config_directory)
+        dpath = os.path.normpath(args.config_directory)
         config_list = []
         try:
             logger.info(f"{pop_stack()} - creating config list")
-            for filename in os.listdir(args.config_directory):
+            for filename in os.listdir(dpath):
                 logger.debug(f"filename: {filename}")
                 m = re.search(r"^cfg_.*\.json$", filename, re.IGNORECASE)
                 if m:
-                    config_list.append(filename)
+                    p = os.path.normpath(f"{dpath}/{filename}")
+                    config_list.append(p)
         except:
             logger.error(f"{pop_stack()} - {sys.exc_info()[0]:}")
             logger.info(f"{pop_stack()} - dag files FAILED")
@@ -33,14 +45,17 @@ def main(logger: ILogger, args: argparse.Namespace):
     else:
         raise Exception("No file provided to validate.")
 
+    exit_code = 0
+
     for c in config_list:
         cpath = c.strip()
         logger.info(f"{pop_stack()} - validating file: {cpath}")
         config = get_json(logger, cpath)
-        schema = get_json(logger, "cfg\dag\dag_cfg_schema.json")
+        schema = get_json(logger, ".cfg\dag\dag_cfg_schema.json")
         logger.info(f"{pop_stack()} - validate schema object")
         result = IJSONValidate(logger, schema, config)
-        logger.info(f"{pop_stack()} - schema valid? {result}")
+        if not result:
+            exit_code = 1
 
         if result and "tasks" in config.keys():
             logger.info(f"{pop_stack()} - validate task object(s)")
@@ -50,6 +65,8 @@ def main(logger: ILogger, args: argparse.Namespace):
                         logger, "cfg\dag\dag_cfg_createtable_task_schema.json"
                     )
                     task_check_result = IJSONValidate(logger, schema, config)
+                    if not task_check_result:
+                        exit_code = 1
         else:
             logger.info(f"{pop_stack()} - task validation skipped")
             skip_reason = (
@@ -59,7 +76,13 @@ def main(logger: ILogger, args: argparse.Namespace):
             )
             logger.debug(f"{pop_stack()} - task validation skipped: {skip_reason}")
 
+    if exit_code != 0:
+        logger.error(
+            f"{pop_stack()} - One or more files have failed validation, check logs for more information."
+        )
+
     logger.info(f"validate config COMPLETED SUCCESSFULLY".center(100, "-"))
+    return exit_code
 
 
 if __name__ == "__main__":
