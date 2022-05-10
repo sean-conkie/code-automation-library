@@ -15,8 +15,8 @@ name: Lint Code Base
 # Start the job on all push #
 #############################
 on:
-  # push:
-    # branches-ignore: [master, main]
+  push:
+    branches-ignore: [master, main]
     # Remove the line above to run when pushing to master
   pull_request:
     branches: [master, main]
@@ -51,6 +51,5 @@ jobs:
           VALIDATE_PYTHON_ISORT: false
           VALIDATE_PYTHON_MYPY: false
           VALIDATE_PYTHON_PYLINT: false
-          VALIDATE_JSCPD: false
           DEFAULT_BRANCH: master
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -3,13 +3,13 @@ verbose = 0
 nocolor = False
 dialect = bigquery
 templater = jinja
+ignore_templated_areas = False
 rules = None
-exclude_rules = L017, L017, L026, L028, L031, L034, L042
+exclude_rules = L003, L017, L018, L026, L028, L031, L034, L042, L047
 recurse = 0
 output_line_length = 80
 runaway_limit = 10
-ignore = None
-ignore_templated_areas = True
+ignore = parsing
 encoding = autodetect
 disable_noqa = False
 sql_file_exts = .sql,.sql.j2,.dml,.ddl
@@ -26,6 +26,14 @@ unwrap_wrapped_queries = True
 
 [sqlfluff:templater:jinja]
 apply_dbt_builtins = True
+
+[sqlfluff:templater:jinja:context]
+params=
+KEY=column
+DATASET_ID=my_dataset
+FROM=my_table
+DATE_FIELD=column
+CHECK_FIELD=column
 
 [sqlfluff:rules]
 tab_space_size = 2
@@ -127,7 +135,7 @@ ignore_words_regex = None
 
 [sqlfluff:rules:L062]
 # Comma separated list of blocked words that should not be used
-blocked_words = all, and, any, array, as, asc, assert_rows_modified, at, between, by, case, cast, collate, contains, create, cross, cube, current, default, define, desc, distinct, else, end, enum, escape, except, exclude, exists, extract, false, fetch, following, for, from, full, group, grouping, groups, hash, having, if, ignore, in, inner, intersect, interval, into, is, join, lateral, left, like, limit, lookup, merge, natural, new, no, not, null, nulls, of, on, or, order, outer, over, partition, preceding, proto, range, recursive, respect, right, rollup, rows, select, set, some, struct, tablesample, then, to, treat, true, unbounded, union, unnest, using, when, where, window, with, within
+blocked_words = ""
 
 [sqlfluff:rules:L063]
 # Data Types
