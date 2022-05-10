@@ -147,6 +147,17 @@ def main(logger: ILogger, args: argparse.Namespace) -> int:
 
 
 def create_data_check_tasks(logger: ILogger, task: dict, properties: dict) -> list:
+    """
+    This function creates a list of data check tasks for a given table
+
+    Args:
+      logger (ILogger): ILogger - this is the logger object that is passed to the function.
+      task (dict): the task object from the config file
+      properties (dict): a dictionary of properties that are used to create the DAG.
+
+    Returns:
+      A list of dictionaries which represent the tasks.
+    """
     logger.info(f"{pop_stack()} - STARTED".center(100, "-"))
     data_check_tasks = []
 
