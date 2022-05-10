@@ -277,7 +277,8 @@
         "driving_table": "uk_pre_customer_spine_offer_is.td_offer_priceable_unit_core",
         "source_to_target": [{
             "name": "id",
-            "source_column": "id"
+            "source_column": "id",
+            "pk": true
           },
           {
             "name": "dw_last_modified_dt",

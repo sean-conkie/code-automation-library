@@ -1,4 +1,5 @@
 import argparse
+from curses import keyname
 import json
 import os
 import re
@@ -69,6 +70,15 @@ def main(logger: ILogger, args: argparse.Namespace) -> int:
                 task["parameters"] = create_table_task(logger, task, cfg["properties"])
                 task["operator"] = "BigQueryOperator"
 
+                # for each task, add a new one to cfg["tasks"] with data check tasks.
+                data_check_tasks = create_data_check_tasks(logger, task)
+                for t in data_check_tasks:
+                    if not t in cfg["tasks"]:
+                        cfg["tasks"].append(t)
+
+            elif task["operator"] == "DataCheck":
+                task["operator"] = "BigQueryCheckOperator"
+
             tasks.append(create_task(logger, task))
 
             if "dependencies" in task.keys():
@@ -134,6 +144,80 @@ def main(logger: ILogger, args: argparse.Namespace) -> int:
 
     logger.info(f"dag files COMPLETED SUCCESSFULLY".center(100, "-"))
     return 0
+
+
+def create_data_check_tasks(logger: ILogger, task: dict, properties: dict) -> list:
+    logger.info(f"{pop_stack()} - STARTED".center(100, "-"))
+    data_check_tasks = []
+
+    table_keys = [
+        field["name"]
+        for field in task["parameters"]["source_to_target"]
+        if "pk" in field.keys() and field["pk"] == True
+    ]
+
+    logger.info(f"{pop_stack()} - creating row count check")
+    dataset = (
+        task["parameters"]["destination_dataset"]
+        if "destination_dataset" in task["parameters"].keys()
+        else properties["dataset_publish"]
+    )
+    table = task["parameters"]["destination_table"]
+    dupe_check_task = {
+        "task_id": f"{task['parameters']['destination_table']}_data_check_row_count",
+        "operator": "DataCheck",
+        "parameters": {"sql": f"select count(*) from {dataset}.{table}"},
+    }
+    data_check_tasks.append(dupe_check_task)
+
+    # create task to check for duplicates on primary key - if primary key
+    # fields specified in config.
+    if len(table_keys) > 0:
+        logger.info(f"{pop_stack()} - creating duplicate data check")
+        dupe_check_task = {
+            "task_id": f"{task['parameters']['destination_table']}_data_check_duplicate_records",
+            "operator": "DataCheck",
+            "parameters": {
+                "sql": "sql/data_check_duplicate_records.sql",
+                "params": {
+                    "DATASET_ID": task["parameters"]["destination_dataset"]
+                    if "destination_dataset" in task["parameters"].keys()
+                    else properties["dataset_publish"],
+                    "FROM": task["parameters"]["destination_table"],
+                    "KEY": ", ".join(table_keys),
+                },
+            },
+        }
+        data_check_tasks.append(dupe_check_task)
+
+    # create task to check for multiple open records - if primary key
+    # fields specified in config.
+    if len(table_keys) > 0 and task["parameters"]["target_type"]:
+        logger.info(f"{pop_stack()} - creating duplicate active history data check")
+        dates = [
+            "effective_from_dt",
+            "effective_from_dt_csn_seq",
+            "effective_from_dt_seq",
+            "effective_to_dt",
+        ]
+        dupe_check_task = {
+            "task_id": f"{task['parameters']['destination_table']}_data_check_open_history_items",
+            "operator": "DataCheck",
+            "parameters": {
+                "sql": "sql/data_check_open_history_items.sql",
+                "params": {
+                    "DATASET_ID": task["parameters"]["destination_dataset"]
+                    if "destination_dataset" in task["parameters"].keys()
+                    else properties["dataset_publish"],
+                    "FROM": task["parameters"]["destination_table"],
+                    "KEY": ", ".join([k for k in table_keys if k not in dates]),
+                },
+            },
+        }
+        data_check_tasks.append(dupe_check_task)
+
+    logger.info(f"dag files COMPLETED SUCCESSFULLY".center(100, "-"))
+    return data_check_tasks
 
 
 def create_table_task(logger: ILogger, task: dict, properties: dict) -> dict:

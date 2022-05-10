@@ -34,18 +34,18 @@
 with
      query_date as (select date(date_add(max({{ params.DATE_FIELD }}), interval -1 day)) query_date
                       from {{ params.DATASET_ID }}.{{ params.FROM }})
-                     where effective_from_dt < current_timestamp()),
+                     where {{ params.DATE_FIELD }} < current_timestamp()),
      old_codes as (select distinct od.{{ params.CHECK_FIELD }}
                      from {{ params.DATASET_ID }}.{{ params.FROM }}) od
                     inner join query_date qd
-                       on date(od.effective_from_dt) <= qd.query_date),
+                       on date(od.{{ params.DATE_FIELD }}) <= qd.query_date),
      new_codes as (select distinct nd.{{ params.CHECK_FIELD }}
                      from {{ params.DATASET_ID }}.{{ params.FROM }}) nd
                     inner join query_date qd
-                       on date(nd.effective_from_dt) > qd.query_date)
+                       on date(nd.{{ params.DATE_FIELD }}) > qd.query_date)
 
 select if(count(*) > 0, false, true)
   from new_codes nc
   left join old_codes oc
     on nc.{{ params.CHECK_FIELD }} = oc.{{ params.CHECK_FIELD }}
-  where oc.status_code is null;
+  where oc.{{ params.CHECK_FIELD }} is null;

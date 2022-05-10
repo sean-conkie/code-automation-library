@@ -163,6 +163,10 @@
               "source_name": {
                 "type": "string",
                 "title": "(Optional) The source table name - defaults to driving_table"
+              },
+              "pk": {
+                "type": "boolean",
+                "title": "Set with a true value to identify field as part of table key; no value, no field or false are all interpereted as false"
               }
             },
             "examples": [{
