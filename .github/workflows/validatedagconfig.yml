@@ -6,7 +6,8 @@ name: Validate DAG Config
 #############################
 on:
   push:
-    branches-ignore: [master, main]
+    paths:
+      - 'cfg/dag/*.json'
     # Remove the line above to run when pushing to master
   pull_request:
     branches: [master, main]
