@@ -1,6 +1,4 @@
 import argparse
-from curses import keyname
-import json
 import os
 import re
 import sys
@@ -67,14 +65,24 @@ def main(logger: ILogger, args: argparse.Namespace) -> int:
         for task in cfg["tasks"]:
             logger.info(f'{pop_stack()} - creating task "{task["task_id"]}"')
             if task["operator"] == "CreateTable":
+                # for each task, add a new one to cfg["tasks"] with data check tasks.
+                if (
+                    "block_data_check" not in task["parameters"].keys()
+                    or not task["parameters"]["block_data_check"]
+                ):
+                    data_check_tasks = create_data_check_tasks(
+                        logger, task, cfg["properties"]
+                    )
+                    for t in data_check_tasks:
+                        if not t in cfg["tasks"]:
+                            cfg["tasks"].append(t)
+
                 task["parameters"] = create_table_task(logger, task, cfg["properties"])
                 task["operator"] = "BigQueryOperator"
 
-                # for each task, add a new one to cfg["tasks"] with data check tasks.
-                data_check_tasks = create_data_check_tasks(logger, task)
-                for t in data_check_tasks:
-                    if not t in cfg["tasks"]:
-                        cfg["tasks"].append(t)
+            elif task["operator"] == "TruncateTable":
+                task["parameters"] = create_table_task(logger, task, cfg["properties"])
+                task["operator"] = "BigQueryOperator"
 
             elif task["operator"] == "DataCheck":
                 task["operator"] = "BigQueryCheckOperator"
@@ -161,11 +169,21 @@ def create_data_check_tasks(logger: ILogger, task: dict, properties: dict) -> li
     logger.info(f"{pop_stack()} - STARTED".center(100, "-"))
     data_check_tasks = []
 
-    table_keys = [
-        field["name"]
-        for field in task["parameters"]["source_to_target"]
-        if "pk" in field.keys() and field["pk"] == True
-    ]
+    if "source_to_target" in task["parameters"].keys():
+        table_keys = [
+            field["name"]
+            for field in task["parameters"]["source_to_target"]
+            if "pk" in field.keys() and field["pk"] == True
+        ]
+
+        history_keys = [
+            field["name"]
+            for field in task["parameters"]["source_to_target"]
+            if "hk" in field.keys() and field["hk"] == True
+        ]
+    else:
+        table_keys = []
+        history_keys = []
 
     logger.info(f"{pop_stack()} - creating row count check")
     dataset = (
@@ -174,12 +192,13 @@ def create_data_check_tasks(logger: ILogger, task: dict, properties: dict) -> li
         else properties["dataset_publish"]
     )
     table = task["parameters"]["destination_table"]
-    dupe_check_task = {
+    row_count_check_task = {
         "task_id": f"{task['parameters']['destination_table']}_data_check_row_count",
         "operator": "DataCheck",
         "parameters": {"sql": f"select count(*) from {dataset}.{table}"},
+        "dependencies": [f"{task['task_id']}"],
     }
-    data_check_tasks.append(dupe_check_task)
+    data_check_tasks.append(row_count_check_task)
 
     # create task to check for duplicates on primary key - if primary key
     # fields specified in config.
@@ -191,19 +210,20 @@ def create_data_check_tasks(logger: ILogger, task: dict, properties: dict) -> li
             "parameters": {
                 "sql": "sql/data_check_duplicate_records.sql",
                 "params": {
-                    "DATASET_ID": task["parameters"]["destination_dataset"]
+                    "DATASET_ID": f"{task['parameters']['destination_dataset']}"
                     if "destination_dataset" in task["parameters"].keys()
-                    else properties["dataset_publish"],
-                    "FROM": task["parameters"]["destination_table"],
-                    "KEY": ", ".join(table_keys),
+                    else f"{properties['dataset_publish']}",
+                    "FROM": f"{task['parameters']['destination_table']}",
+                    "KEY": f"{', '.join(table_keys)}",
                 },
             },
+            "dependencies": [task["task_id"]],
         }
         data_check_tasks.append(dupe_check_task)
 
     # create task to check for multiple open records - if primary key
     # fields specified in config.
-    if len(table_keys) > 0 and task["parameters"]["target_type"]:
+    if len(table_keys) > 0 and task["parameters"]["target_type"] == 2:
         logger.info(f"{pop_stack()} - creating duplicate active history data check")
         dates = [
             "effective_from_dt",
@@ -217,13 +237,14 @@ def create_data_check_tasks(logger: ILogger, task: dict, properties: dict) -> li
             "parameters": {
                 "sql": "sql/data_check_open_history_items.sql",
                 "params": {
-                    "DATASET_ID": task["parameters"]["destination_dataset"]
+                    "DATASET_ID": f"{task['parameters']['destination_dataset']}"
                     if "destination_dataset" in task["parameters"].keys()
-                    else properties["dataset_publish"],
-                    "FROM": task["parameters"]["destination_table"],
-                    "KEY": ", ".join([k for k in table_keys if k not in dates]),
+                    else f"{properties['dataset_publish']}",
+                    "FROM": f"{task['parameters']['destination_table']}",
+                    "KEY": f"{', '.join(history_keys)}",
                 },
             },
+            "dependencies": [task["task_id"]],
         }
         data_check_tasks.append(dupe_check_task)
 
@@ -313,7 +334,15 @@ def create_task(logger: ILogger, task: dict) -> str:
         elif type(task["parameters"][key]) == str:
             value = f"f'''{task['parameters'][key]}'''"
         elif key == "params":
-            value = f"{{'dataset_publish': f'{task['parameters'][key]['dataset_publish']}'}}"
+            # value = f"{{'dataset_publish': f'{task['parameters'][key]['dataset_publish']}'}}"
+            value = {}
+            for p in task["parameters"]["params"].keys():
+                value[p] = (
+                    "f'{dataset_publish}'"
+                    if task["parameters"][key][p] == "{dataset_publish}"
+                    else f'{task["parameters"]["params"][p]}'
+                )
+
         else:
             value = f"{task['parameters'][key]}"
 
@@ -469,7 +498,9 @@ if __name__ == "__main__":
 
     known_args, args = parser.parse_known_args()
 
-    log_file_name = f'./logs/builddags_{datetime.now().strftime("%Y-%m-%dT%H%M%S")}.log'
+    log_file_name = os.path.normpath(
+        f'./logs/builddags_{datetime.now().strftime("%Y-%m-%dT%H%M%S")}.log'
+    )
     logger = ILogger("builddags", log_file_name, known_args.level)
 
     try:
