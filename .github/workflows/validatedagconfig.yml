@@ -41,7 +41,7 @@ jobs:
           architecture: 'x64' # optional x64 or x86. Defaults to x64 if not specified
 
       - name: Install Python Requirements
-        run: pip install -r .github/workflows/dependencies/validatedagconfig.txt
+        run: pip install -r .github/workflows/requirements.txt
       ####################################
       # Run JSON Validate against commit #
       ####################################
