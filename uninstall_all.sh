@@ -1,11 +1,10 @@
-# A shell script that will un-install all python pakges.
 #!/usr/bin/env bash
+# A shell script that will un-install all python pakges.
 
 echo "-------------------------------------------------"
 echo "------ Un-Install All Python Requirements -------"
 echo "-------------------------------------------------"
 
-LOG_FILE="./logs/un_install_$(date -d "today" +"%Y%m%d%H%M").log"
 UNINSTALL_FILE="./un_install_$(date -d "today" +"%Y%m%d%H%M").txt"
 
 pip freeze > "$UNINSTALL_FILE"

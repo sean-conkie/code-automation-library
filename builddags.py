@@ -32,7 +32,7 @@ def main(logger: ILogger, args: argparse.Namespace) -> int:
     """
 
     logger.info(f"dag files - {pop_stack()} STARTED".center(100, "-"))
-    
+
     dpath = args.config_directory
     opath = args.output_directory
     config_list = []
