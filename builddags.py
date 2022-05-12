@@ -1,4 +1,5 @@
 import argparse
+import black
 import os
 import re
 import sys
@@ -146,9 +147,14 @@ def main(logger: ILogger, args: argparse.Namespace) -> int:
             properties=properties,
         )
 
+        # reformat dag files to pass linting
+        reformatted = black.format_file_contents(
+            output, fast=False, mode=black.FileMode()
+        )
+
         dag_file = f"{opath}{cfg['name']}.py"
         with open(dag_file, "w") as outfile:
-            outfile.write(output)
+            outfile.write(reformatted)
 
     logger.info(f"dag files COMPLETED SUCCESSFULLY".center(100, "-"))
     return 0
