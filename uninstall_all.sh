@@ -19,4 +19,4 @@ echo "----------------------------------------------"
 echo " - un-installation complete"
 echo "----------------------------------------------"
 
-read -p "Press any key to end ..."
+read -p -r "Press any key to end ..."
