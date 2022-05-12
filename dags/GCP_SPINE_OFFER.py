@@ -209,6 +209,28 @@ with DAG(
         params={"dataset_publish": "f'{dataset_publish}'"},
         dag=dag,
     )
+    dim_offer_status_data_check_new_value_status_code = BigQueryCheckOperator(
+        task_id="dim_offer_status_data_check_new_value_status_code",
+        sql=f"""sql/data_check_new_value.sql""",
+        params={
+            "DATASET_ID": "uk_pub_customer_spine_offer_is",
+            "FROM": "dim_offer_status",
+            "CHECK_FIELD": "status_code",
+            "DATE_FIELD": "effective_from_dt",
+        },
+        dag=dag,
+    )
+    dim_offer_status_data_check_new_value_reason_code = BigQueryCheckOperator(
+        task_id="dim_offer_status_data_check_new_value_reason_code",
+        sql=f"""sql/data_check_new_value.sql""",
+        params={
+            "DATASET_ID": "uk_pub_customer_spine_offer_is",
+            "FROM": "dim_offer_status",
+            "CHECK_FIELD": "reason_code",
+            "DATE_FIELD": "effective_from_dt",
+        },
+        dag=dag,
+    )
     dim_offer_type_data_check_row_count = BigQueryCheckOperator(
         task_id="dim_offer_type_data_check_row_count",
         sql=f"""select count(*) from uk_pub_customer_spine_offer_is.dim_offer_type""",
@@ -278,7 +300,7 @@ with DAG(
     finish_pipeline = DummyOperator(task_id="finish_pipeline", trigger_ruke="all_done")
 
     # Define task dependencies
-    a >> dim_offer_type
+    start_pipeline >> dim_offer_type
     start_pipeline >> td_offer_status_core
     start_pipeline >> td_offer_priceable_unit_core
     start_pipeline >> td_offer_priceable_unit_soip
@@ -305,6 +327,8 @@ with DAG(
     ext_task_one >> td_offer_status_soip
     td_offer_status_core >> dim_offer_status
     td_offer_status_soip >> dim_offer_status
+    dim_offer_status >> dim_offer_status_data_check_new_value_status_code
+    dim_offer_status >> dim_offer_status_data_check_new_value_reason_code
     dim_offer_type >> dim_offer_type_data_check_row_count
     dim_offer_type >> dim_offer_type_data_check_duplicate_records
     dim_offer_discount >> dim_offer_discount_data_check_row_count
@@ -315,6 +339,8 @@ with DAG(
     dim_offer_status >> dim_offer_status_data_check_open_history_items
     dim_offer_priceable_unit_data_check_row_count >> finish_pipeline
     dim_offer_priceable_unit_data_check_duplicate_records >> finish_pipeline
+    dim_offer_status_data_check_new_value_status_code >> finish_pipeline
+    dim_offer_status_data_check_new_value_reason_code >> finish_pipeline
     dim_offer_type_data_check_row_count >> finish_pipeline
     dim_offer_type_data_check_duplicate_records >> finish_pipeline
     dim_offer_discount_data_check_row_count >> finish_pipeline

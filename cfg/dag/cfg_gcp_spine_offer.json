@@ -85,7 +85,7 @@
           "fields": ["uk_tds_refdata_eod_is.cc_refdata_bsboffertooffertype.rdmaction", "'D'"]
         }]
       },
-      "dependencies": ["a"]
+      "dependencies": []
     },
     {
       "task_id": "td_offer_status_core",
@@ -582,6 +582,34 @@
         ]
       },
       "dependencies": ["td_offer_status_core", "td_offer_status_soip"]
+    },
+    {
+      "operator": "DataCheck",
+      "task_id": "dim_offer_status_data_check_new_value_status_code",
+      "parameters": {
+        "sql": "sql/data_check_new_value.sql",
+        "params": {
+          "DATASET_ID": "uk_pub_customer_spine_offer_is",
+          "FROM": "dim_offer_status",
+          "CHECK_FIELD": "status_code",
+          "DATE_FIELD": "effective_from_dt"
+        }
+      },
+      "dependencies": ["dim_offer_status"]
+    },
+    {
+      "operator": "DataCheck",
+      "task_id": "dim_offer_status_data_check_new_value_reason_code",
+      "parameters": {
+        "sql": "sql/data_check_new_value.sql",
+        "params": {
+          "DATASET_ID": "uk_pub_customer_spine_offer_is",
+          "FROM": "dim_offer_status",
+          "CHECK_FIELD": "reason_code",
+          "DATE_FIELD": "effective_from_dt"
+        }
+      },
+      "dependencies": ["dim_offer_status"]
     }
   ]
 }

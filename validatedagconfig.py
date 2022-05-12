@@ -149,6 +149,7 @@ if __name__ == "__main__":
         logger.error(f"{traceback.format_exc():}")
         logger.debug(f"{sys.exc_info()[1]:}")
         logger.info(f"Config Validate FAILED".center(100, "-"))
+        result = 1
 
     if result != 0:
         raise Exception("Exiting with errors found!")
