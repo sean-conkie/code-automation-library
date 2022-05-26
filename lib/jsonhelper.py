@@ -2,7 +2,6 @@ import fastjsonschema
 import json
 import os
 import sys
-import traceback
 
 from lib.logger import ILogger, pop_stack
 
