@@ -19,4 +19,8 @@ echo "----------------------------------------------"
 echo " - un-installation complete"
 echo "----------------------------------------------"
 
+<<<<<<< HEAD
 read -p -r "Press any key to end ..."
+=======
+read -p -r "Press any key to end ..."
+>>>>>>> 21537ae1b5d8d43e3527021afe65a0b176911617
