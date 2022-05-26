@@ -29,6 +29,10 @@
       "type": "object",
       "title": "Operator parameters, each operator will have it's own list of required parameters.",
       "properties": {
+        "block_data_check": {
+          "type": "boolean",
+          "title": "Defines if data check tasks should be created, where false or None then data check tasks will be generated."
+        },
         "destination_table": {
           "type": "string",
           "title": "The destination_table",
@@ -135,7 +139,7 @@
         },
         "source_to_target": {
           "type": "array",
-          "title": "The source to target of the desired table",
+          "title": "The source to target of the desired table. Can also be used to provide primary key fields for use in data check tasks.",
           "items": {
             "type": "object",
             "title": "Represents each column",
@@ -163,6 +167,14 @@
               "source_name": {
                 "type": "string",
                 "title": "(Optional) The source table name - defaults to driving_table"
+              },
+              "pk": {
+                "type": "boolean",
+                "title": "Set with a true value to identify field as part of table key; no value, no field or false are all interpereted as false"
+              },
+              "hk": {
+                "type": "boolean",
+                "title": "Indicates field is part of the 'history' key, which defines the object history is tracked on."
               }
             },
             "examples": [{

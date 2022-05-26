@@ -1,4 +1,5 @@
 import argparse
+import black
 import os
 import re
 import sys
@@ -30,14 +31,15 @@ def main(logger: ILogger, args: argparse.Namespace) -> int:
             1: failure
     """
 
-    logger.info(f"dag files STARTED".center(100, "-"))
+    logger.info(f"dag files - {pop_stack()} STARTED".center(100, "-"))
+
     dpath = args.config_directory
     opath = args.output_directory
     config_list = []
 
     # create a list of config files using the source directory (dpath), if the
     # path provided is a file add id otherwise append each filename in directory
-    logger.info(f"{pop_stack()} - creating config list")
+    logger.info(f"creating config list")
     if not os.path.isdir(dpath) and os.path.exists(dpath):
         config_list.append(dpath)
     else:
@@ -52,7 +54,7 @@ def main(logger: ILogger, args: argparse.Namespace) -> int:
     for config in config_list:
         path = config if os.path.exists(config) else f"{dpath}{config}"
         cfg = get_json(logger, path)
-        logger.info(f"{pop_stack()} - building dag - {cfg['name']}")
+        logger.info(f"building dag - {cfg['name']}")
 
         dag_string = create_dag_string(logger, cfg["name"], cfg["dag"])
         default_args = create_dag_args(logger, cfg["args"])
@@ -63,10 +65,29 @@ def main(logger: ILogger, args: argparse.Namespace) -> int:
         # for each item in the task array, check the operator type and use this
         # to determine the task parameters to be used
         for task in cfg["tasks"]:
-            logger.info(f'{pop_stack()} - creating task "{task["task_id"]}"')
+            logger.info(f'creating task "{task["task_id"]}" - {pop_stack()}')
             if task["operator"] == "CreateTable":
+                # for each task, add a new one to cfg["tasks"] with data check tasks.
+                if (
+                    "block_data_check" not in task["parameters"].keys()
+                    or not task["parameters"]["block_data_check"]
+                ):
+                    data_check_tasks = create_data_check_tasks(
+                        logger, task, cfg["properties"]
+                    )
+                    for t in data_check_tasks:
+                        if not t in cfg["tasks"]:
+                            cfg["tasks"].append(t)
+
                 task["parameters"] = create_table_task(logger, task, cfg["properties"])
                 task["operator"] = "BigQueryOperator"
+
+            elif task["operator"] == "TruncateTable":
+                task["parameters"] = create_table_task(logger, task, cfg["properties"])
+                task["operator"] = "BigQueryOperator"
+
+            elif task["operator"] == "DataCheck":
+                task["operator"] = "BigQueryCheckOperator"
 
             tasks.append(create_task(logger, task))
 
@@ -113,7 +134,7 @@ def main(logger: ILogger, args: argparse.Namespace) -> int:
             f"{key} = '{cfg['properties'][key]}'" for key in cfg["properties"].keys()
         ]
 
-        logger.info(f"{pop_stack()} - populating template")
+        logger.info(f"populating template")
         file_loader = FileSystemLoader("./templates")
         env = Environment(loader=file_loader)
 
@@ -127,12 +148,115 @@ def main(logger: ILogger, args: argparse.Namespace) -> int:
             properties=properties,
         )
 
+        # reformat dag files to pass linting
+        reformatted = black.format_file_contents(
+            output, fast=False, mode=black.FileMode()
+        )
+
         dag_file = f"{opath}{cfg['name']}.py"
         with open(dag_file, "w") as outfile:
-            outfile.write(output)
+            outfile.write(reformatted)
 
-    logger.info(f"dag files COMPLETED SUCCESSFULLY".center(100, "-"))
+    logger.info(f"dag files {pop_stack()} COMPLETED SUCCESSFULLY".center(100, "-"))
     return 0
+
+
+def create_data_check_tasks(logger: ILogger, task: dict, properties: dict) -> list:
+    """
+    This function creates a list of data check tasks for a given table
+
+    Args:
+      logger (ILogger): ILogger - this is the logger object that is passed to the function.
+      task (dict): the task object from the config file
+      properties (dict): a dictionary of properties that are used to create the DAG.
+
+    Returns:
+      A list of dictionaries which represent the tasks.
+    """
+    logger.info(f"{pop_stack()} STARTED".center(100, "-"))
+    data_check_tasks = []
+
+    if "source_to_target" in task["parameters"].keys():
+        table_keys = [
+            field["name"]
+            for field in task["parameters"]["source_to_target"]
+            if "pk" in field.keys() and field["pk"] == True
+        ]
+
+        history_keys = [
+            field["name"]
+            for field in task["parameters"]["source_to_target"]
+            if "hk" in field.keys() and field["hk"] == True
+        ]
+    else:
+        table_keys = []
+        history_keys = []
+
+    logger.info(f"creating row count check")
+    dataset = (
+        task["parameters"]["destination_dataset"]
+        if "destination_dataset" in task["parameters"].keys()
+        else properties["dataset_publish"]
+    )
+    table = task["parameters"]["destination_table"]
+    row_count_check_task = {
+        "task_id": f"{task['parameters']['destination_table']}_data_check_row_count",
+        "operator": "DataCheck",
+        "parameters": {"sql": f"select count(*) from {dataset}.{table}"},
+        "dependencies": [f"{task['task_id']}"],
+    }
+    data_check_tasks.append(row_count_check_task)
+
+    # create task to check for duplicates on primary key - if primary key
+    # fields specified in config.
+    if len(table_keys) > 0:
+        logger.info(f"creating duplicate data check")
+        dupe_check_task = {
+            "task_id": f"{task['parameters']['destination_table']}_data_check_duplicate_records",
+            "operator": "DataCheck",
+            "parameters": {
+                "sql": "sql/data_check_duplicate_records.sql",
+                "params": {
+                    "DATASET_ID": f"{task['parameters']['destination_dataset']}"
+                    if "destination_dataset" in task["parameters"].keys()
+                    else f"{properties['dataset_publish']}",
+                    "FROM": f"{task['parameters']['destination_table']}",
+                    "KEY": f"{', '.join(table_keys)}",
+                },
+            },
+            "dependencies": [task["task_id"]],
+        }
+        data_check_tasks.append(dupe_check_task)
+
+    # create task to check for multiple open records - if primary key
+    # fields specified in config.
+    if len(table_keys) > 0 and task["parameters"]["target_type"] == 2:
+        logger.info(f"creating duplicate active history data check")
+        dates = [
+            "effective_from_dt",
+            "effective_from_dt_csn_seq",
+            "effective_from_dt_seq",
+            "effective_to_dt",
+        ]
+        dupe_check_task = {
+            "task_id": f"{task['parameters']['destination_table']}_data_check_open_history_items",
+            "operator": "DataCheck",
+            "parameters": {
+                "sql": "sql/data_check_open_history_items.sql",
+                "params": {
+                    "DATASET_ID": f"{task['parameters']['destination_dataset']}"
+                    if "destination_dataset" in task["parameters"].keys()
+                    else f"{properties['dataset_publish']}",
+                    "FROM": f"{task['parameters']['destination_table']}",
+                    "KEY": f"{', '.join(history_keys)}",
+                },
+            },
+            "dependencies": [task["task_id"]],
+        }
+        data_check_tasks.append(dupe_check_task)
+
+    logger.info(f"dag files {pop_stack()} COMPLETED SUCCESSFULLY".center(100, "-"))
+    return data_check_tasks
 
 
 def create_table_task(logger: ILogger, task: dict, properties: dict) -> dict:
@@ -150,7 +274,7 @@ def create_table_task(logger: ILogger, task: dict, properties: dict) -> dict:
         A dictionary containing expected parameters for the desired task (BigQueryOperator)
     """
 
-    logger.info(f"{pop_stack()} - STARTED".center(100, "-"))
+    logger.info(f"{pop_stack()} STARTED".center(100, "-"))
     dataset_staging = properties["dataset_staging"]
     dataset_publish = (
         "{dataset_publish}"
@@ -184,7 +308,7 @@ def create_table_task(logger: ILogger, task: dict, properties: dict) -> dict:
         "params": {"dataset_publish": dataset_publish},
     }
 
-    logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100, "-"))
+    logger.info(f"{pop_stack()} COMPLETED SUCCESSFULLY".center(100, "-"))
     return outp
 
 
@@ -198,9 +322,9 @@ def create_task(logger: ILogger, task: dict) -> str:
     returns:
         A string of python code that can be added to the target file
     """
-    logger.info(f"{pop_stack()} - STARTED".center(100, "-"))
+    logger.info(f"{pop_stack()} STARTED".center(100, "-"))
     logger.debug(
-        f"""{pop_stack()} - creating task {task["task_id"]} from:
+        f"""creating task {task["task_id"]} from:
                                parameters - {task["parameters"]}"""
     )
 
@@ -217,14 +341,22 @@ def create_task(logger: ILogger, task: dict) -> str:
         elif type(task["parameters"][key]) == str:
             value = f"f'''{task['parameters'][key]}'''"
         elif key == "params":
-            value = f"{{'dataset_publish': f'{task['parameters'][key]['dataset_publish']}'}}"
+            # value = f"{{'dataset_publish': f'{task['parameters'][key]['dataset_publish']}'}}"
+            value = {}
+            for p in task["parameters"]["params"].keys():
+                value[p] = (
+                    "f'{dataset_publish}'"
+                    if task["parameters"][key][p] == "{dataset_publish}"
+                    else f'{task["parameters"]["params"][p]}'
+                )
+
         else:
             value = f"{task['parameters'][key]}"
 
         outp.append(f"{key} = {value}")
     outp.append("dag=dag)")
 
-    logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100, "-"))
+    logger.info(f"{pop_stack()} COMPLETED SUCCESSFULLY".center(100, "-"))
     return ",\n          ".join(outp)
 
 
@@ -242,7 +374,7 @@ def create_dag_string(logger: ILogger, name: str, dag: dict) -> str:
     Returns:
       A string of python code that can be added to the target file
     """
-    logger.info(f"{pop_stack()} - STARTED".center(100, "-"))
+    logger.info(f"{pop_stack()} STARTED".center(100, "-"))
     # we first set DAG defaults - these can also be excluded completely and
     # use Environment settings
     odag = {
@@ -274,7 +406,7 @@ def create_dag_string(logger: ILogger, name: str, dag: dict) -> str:
 
     outp = f"'{name}',{', '.join([f'{key} = {odag[key]}' for key in odag.keys()])}"
 
-    logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100, "-"))
+    logger.info(f"{pop_stack()} COMPLETED SUCCESSFULLY".center(100, "-"))
     return outp
 
 
@@ -289,7 +421,7 @@ def create_dag_args(logger: ILogger, args: dict) -> str:
     Returns:
       A string that is a dictionary of arguments for the DAG.
     """
-    logger.info(f"{pop_stack()} - STARTED".center(100, "-"))
+    logger.info(f"{pop_stack()} STARTED".center(100, "-"))
     oargs = {
         "depends_on_past": False,
         "email_on_failure": False,
@@ -336,7 +468,7 @@ def create_dag_args(logger: ILogger, args: dict) -> str:
     )
     outp = f"{{{outstr}}}"
 
-    logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100, "-"))
+    logger.info(f"{pop_stack()} COMPLETED SUCCESSFULLY".center(100, "-"))
     return outp
 
 
@@ -373,7 +505,9 @@ if __name__ == "__main__":
 
     known_args, args = parser.parse_known_args()
 
-    log_file_name = f'./logs/builddags_{datetime.now().strftime("%Y-%m-%dT%H%M%S")}.log'
+    log_file_name = os.path.normpath(
+        f'./logs/builddags_{datetime.now().strftime("%Y-%m-%dT%H%M%S")}.log'
+    )
     logger = ILogger("builddags", log_file_name, known_args.level)
 
     try:
@@ -381,4 +515,4 @@ if __name__ == "__main__":
     except:
         logger.error(f"{traceback.format_exc():}")
         logger.debug(f"{sys.exc_info()[1]:}")
-        logger.info(f"dag files FAILED".center(100, "-"))
+        logger.info(f"dag files - {pop_stack()} FAILED".center(100, "-"))

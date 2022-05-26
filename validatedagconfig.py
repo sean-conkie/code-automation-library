@@ -65,13 +65,25 @@ def main(logger: ILogger, args: argparse.Namespace):
         if result and "tasks" in config.keys():
             logger.info(f"{pop_stack()} - validate task object(s)")
             for t in config["tasks"]:
+                task_schema = None
                 if t["operator"] == "CreateTable":
                     task_schema = get_json(
                         logger, "./cfg/dag/dag_cfg_createtable_task_schema.json"
                     )
-                    task_check_result = IJSONValidate(logger, task_schema, config)
+                elif t["operator"] == "DataCheck":
+                    task_schema = get_json(
+                        logger, "./cfg/dag/dag_cfg_datacheck_task_schema.json"
+                    )
+
+                if task_schema:
+                    logger.debug(f"{pop_stack()} - validating task: {t['task_id']}")
+                    task_check_result = IJSONValidate(logger, task_schema, t)
                     if not task_check_result:
                         exit_code = 1
+                else:
+                    logger.debug(
+                        f"{pop_stack()} - skipped task: {t['task_id'] if 'task_id' in t.keys() else '<missing task id>'} ({t['operator'] if 'operator' in t.keys() else '<missing task operator>'})"
+                    )
         else:
             logger.info(f"{pop_stack()} - task validation skipped")
             skip_reason = (
@@ -111,10 +123,24 @@ if __name__ == "__main__":
         default="DEBUG",
         help="Specify the desired log level (default: DEBUG).  This can be one of the following: 'CRITICAL', 'DEBUG', 'ERROR', 'FATAL','INFO','NOTSET', 'WARNING'",
     )
+    parser.add_argument(
+        "--log_directory",
+        required=False,
+        dest="log_dir",
+        default=None,
+        help="Specify the desired output directory for logs.  No dir means no log file will be output.",
+    )
 
     known_args, args = parser.parse_known_args()
 
-    logger = ILogger("Config Validate", level=known_args.level)
+    log_file_name = (
+        os.path.normpath(
+            f'{known_args.log_dir}/validatedagconfig_{datetime.now().strftime("%Y-%m-%dT%H%M%S")}.log'
+        )
+        if known_args.log_dir
+        else None
+    )
+    logger = ILogger("Config Validate", log_file_name, level=known_args.level)
 
     try:
         result = main(logger, known_args)
@@ -122,6 +148,7 @@ if __name__ == "__main__":
         logger.error(f"{traceback.format_exc():}")
         logger.debug(f"{sys.exc_info()[1]:}")
         logger.info(f"Config Validate FAILED".center(100, "-"))
+        result = 1
 
     if result != 0:
         raise Exception("Exiting with errors found!")
