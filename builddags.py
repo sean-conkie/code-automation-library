@@ -1,6 +1,7 @@
 import argparse
 import black
 import os
+import pathlib
 import re
 import sys
 import traceback
@@ -10,6 +11,7 @@ from jinja2 import Environment, FileSystemLoader
 from lib.jsonhelper import get_json
 from lib.logger import ILogger, pop_stack
 from lib.sql_helper import create_sql_file
+from shutil import copy
 
 
 def main(logger: ILogger, args: argparse.Namespace) -> int:
@@ -88,6 +90,12 @@ def main(logger: ILogger, args: argparse.Namespace) -> int:
 
             elif task["operator"] == "DataCheck":
                 task["operator"] = "BigQueryCheckOperator"
+
+            elif task["operator"] == "LoadFromGCS":
+                task["parameters"] = create_gcs_load_task(
+                    logger, task, cfg["properties"]
+                )
+                task["operator"] = "GoogleCloudStorageToBigQueryOperator"
 
             tasks.append(create_task(logger, task))
 
@@ -257,6 +265,88 @@ def create_data_check_tasks(logger: ILogger, task: dict, properties: dict) -> li
 
     logger.info(f"dag files {pop_stack()} COMPLETED SUCCESSFULLY".center(100, "-"))
     return data_check_tasks
+
+
+def create_gcs_load_task(logger: ILogger, task: dict, properties: dict) -> dict:
+
+    logger.info(f"{pop_stack()} STARTED".center(100, "-"))
+    gs_source_bucket = (
+        "{gs_source_bucket}"
+        if not "bucket" in task["parameters"].keys()
+        else task["parameters"]["bucket"]
+    )  # set to use variable from target file if not in task parameters
+
+    dataset_source = (
+        "{dataset_source}"
+        if not "destination_dataset" in task["parameters"].keys()
+        else task["parameters"]["destination_dataset"]
+    )
+
+    destination_dataset_table = (
+        f"{dataset_source}.{task['parameters']['destination_table']}"
+    )
+
+    write_disposition = (
+        "WRITE_APPEND"
+        if not "write_disposition" in task["parameters"].keys()
+        else f"{task['parameters']['write_disposition']}"
+    )
+
+    if "source_format" in task["parameters"].keys():
+        source_format = f"{task['parameters']['source_format']}"
+    else:
+        obj = task["parameters"]["source_objects"][0]
+        obj_ext = pathlib.Path(os.path.normpath(obj)).suffix
+
+        if obj_ext == ".json":
+            source_format = "NEWLINE_DELIMITED_JSON"
+        else:
+            source_format = obj_ext.replace(".", "").upper()
+
+    obj = os.path.basename(task["parameters"]["schema_object"])
+    schema_object = f"schema/{obj}"
+    schema_source = os.path.normpath(task["parameters"]["schema_object"])
+    schema_target = os.path.normpath(f"dags/{schema_object}")
+    if not os.path.isfile(schema_source):
+        logger.debug(f'      task id: {task["task_id"]}')
+        logger.debug(f'schema object: {task["parameters"]["schema_object"]}')
+        raise FileNotFoundError(f"'{schema_source}' not found.")
+    # if schema file doesn't exist in dags/schema/ dir then copy it
+    if not os.path.isfile(schema_target) and os.path.isfile(schema_source):
+        logger.debug(
+            f'Copying {schema_source} to {schema_target}'
+        )
+        copy(
+            schema_source,
+            schema_target,
+        )
+
+    field_delimiter = (
+        ","
+        if not "field_delimiter" in task["parameters"].keys()
+        else f"{task['parameters']['field_delimiter']}"
+    )
+
+    skip_leading_rows = (
+        1
+        if not "skip_leading_rows" in task["parameters"].keys()
+        else f"{task['parameters']['skip_leading_rows']}"
+    )
+
+    outp = {
+        "bucket": gs_source_bucket,
+        "destination_dataset_table": destination_dataset_table,
+        "write_disposition": write_disposition,
+        "create_disposition": "CREATE_IF_NEEDED",
+        "source_objects": task["parameters"]["source_objects"],
+        "source_format": source_format,
+        "field_delimiter": field_delimiter,
+        "skip_leading_rows": skip_leading_rows,
+        "schema_object": schema_object,
+    }
+
+    logger.info(f"{pop_stack()} COMPLETED SUCCESSFULLY".center(100, "-"))
+    return outp
 
 
 def create_table_task(logger: ILogger, task: dict, properties: dict) -> dict:

@@ -9,11 +9,23 @@
     "email": ["sean.conkie@sky.uk"]
   },
   "properties": {
+    "dataset_source": "uk_arc_chordiant_is",
     "dataset_staging": "uk_pre_customer_spine_offer_is",
-    "dataset_publish": "uk_pub_customer_spine_offer_is"
+    "dataset_publish": "uk_pub_customer_spine_offer_is",
+    "gs_source_bucket": "uk_customer_tds_is"
   },
   "imports": [],
   "tasks": [{
+      "task_id": "load_teams",
+      "operator": "LoadFromGCS",
+      "parameters": {
+        "source_objects": ["team*.json"],
+        "schema_object": "cfg/table/arc_team.json",
+        "destination_table": "arc_teams"
+      },
+      "dependencies": []
+    },
+    {
       "task_id": "dim_offer_type",
       "operator": "CreateTable",
       "parameters": {
