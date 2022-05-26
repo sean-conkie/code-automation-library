@@ -3,13 +3,16 @@ from airflow.contrib.operators.bigquery_operator import (
     BigQueryOperator,
     BigQueryCheckOperator,
 )
+from airflow.contrib.operators.gcs_to_bq import GoogleCloudStorageToBigQueryOperator
 from airflow.operators.dummy_operator import DummyOperator
 from airflow.sensors.external_task import ExternalTaskSensor
 from datetime import datetime, timedelta
 
 
+dataset_source = "uk_arc_chordiant_is"
 dataset_staging = "uk_pre_customer_spine_offer_is"
 dataset_publish = "uk_pub_customer_spine_offer_is"
+gs_source_bucket = "uk_customer_tds_is"
 
 
 default_args = {
@@ -40,6 +43,19 @@ with DAG(
 
     start_pipeline = DummyOperator(task_id="start_pipeline", dag=dag)
 
+    load_teams = GoogleCloudStorageToBigQueryOperator(
+        task_id="load_teams",
+        bucket=f"""{gs_source_bucket}""",
+        destination_dataset_table=f"""{dataset_source}.arc_teams""",
+        write_disposition=f"""WRITE_APPEND""",
+        create_disposition=f"""CREATE_IF_NEEDED""",
+        source_objects=["team*.json"],
+        source_format=f"""NEWLINE_DELIMITED_JSON""",
+        field_delimiter=f""",""",
+        skip_leading_rows=1,
+        schema_object=f"""schema/arc_team.json""",
+        dag=dag,
+    )
     dim_offer_type = BigQueryOperator(
         task_id="dim_offer_type",
         sql=f"""dags/sql/dim_offer_type.sql""",
@@ -300,6 +316,7 @@ with DAG(
     finish_pipeline = DummyOperator(task_id="finish_pipeline", trigger_ruke="all_done")
 
     # Define task dependencies
+    start_pipeline >> load_teams
     start_pipeline >> dim_offer_type
     start_pipeline >> td_offer_status_core
     start_pipeline >> td_offer_priceable_unit_core
@@ -337,6 +354,7 @@ with DAG(
     dim_offer_status >> dim_offer_status_data_check_row_count
     dim_offer_status >> dim_offer_status_data_check_duplicate_records
     dim_offer_status >> dim_offer_status_data_check_open_history_items
+    load_teams >> finish_pipeline
     dim_offer_priceable_unit_data_check_row_count >> finish_pipeline
     dim_offer_priceable_unit_data_check_duplicate_records >> finish_pipeline
     dim_offer_status_data_check_new_value_status_code >> finish_pipeline
