@@ -1,6 +1,4 @@
 import argparse
-import json
-from logging import raiseExceptions
 import os
 import re
 import sys
@@ -71,7 +69,7 @@ def main(logger: ILogger, args: argparse.Namespace):
                     task_schema = get_json(
                         logger, "./cfg/dag/dag_cfg_createtable_task_schema.json"
                     )
-                    task_check_result = IJSONValidate(logger, schema, config)
+                    task_check_result = IJSONValidate(logger, task_schema, config)
                     if not task_check_result:
                         exit_code = 1
         else:
