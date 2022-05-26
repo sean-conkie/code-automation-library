@@ -268,6 +268,27 @@ def create_data_check_tasks(logger: ILogger, task: dict, properties: dict) -> li
 
 
 def create_gcs_load_task(logger: ILogger, task: dict, properties: dict) -> dict:
+    """
+    This function creates a task that loads data from a Google Cloud Storage bucket into a BigQuery
+    table
+
+    Args:
+      logger (ILogger): ILogger
+      task (dict): the task dictionary from the task file
+      properties (dict): {
+
+    Returns:
+      A dictionary with the following keys:
+        bucket
+        destination_dataset_table
+        write_disposition
+        create_disposition
+        source_objects
+        source_format
+        field_delimiter
+        skip_leading_rows
+        schema_object
+    """
 
     logger.info(f"{pop_stack()} STARTED".center(100, "-"))
     gs_source_bucket = (
@@ -313,9 +334,7 @@ def create_gcs_load_task(logger: ILogger, task: dict, properties: dict) -> dict:
         raise FileNotFoundError(f"'{schema_source}' not found.")
     # if schema file doesn't exist in dags/schema/ dir then copy it
     if not os.path.isfile(schema_target) and os.path.isfile(schema_source):
-        logger.debug(
-            f'Copying {schema_source} to {schema_target}'
-        )
+        logger.debug(f"Copying {schema_source} to {schema_target}")
         copy(
             schema_source,
             schema_target,
