@@ -34,7 +34,7 @@
 with
      query_date as (select date(date_add(max({{ params.DATE_FIELD }}), interval -1 day)) query_date
                       from {{ params.DATASET_ID }}.{{ params.FROM }})
-                     where {{ params.DATE_FIELD }} < current_timestamp()),
+                     where{{ params.DATE_FIELD }} < current_timestamp()),
      old_codes as (select distinct od.{{ params.CHECK_FIELD }}
                      from {{ params.DATASET_ID }}.{{ params.FROM }}) od
                     inner join query_date qd
