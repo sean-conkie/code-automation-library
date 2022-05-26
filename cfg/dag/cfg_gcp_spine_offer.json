@@ -32,10 +32,10 @@
             }
           ]
         }],
-        "source_to_target": [
-          {
+        "source_to_target": [{
             "name": "id",
-            "source_column": "id"
+            "source_column": "id",
+            "pk": true
           },
           {
             "name": "dw_last_modified_dt",
@@ -91,6 +91,7 @@
       "task_id": "td_offer_status_core",
       "operator": "CreateTable",
       "parameters": {
+        "block_data_check": true,
         "write_disposition": "WRITE_TRUNCATE",
         "destination_table": "td_offer_status_core",
         "destination_dataset": "uk_pre_customer_spine_offer_is",
@@ -139,7 +140,9 @@
         "source_to_target": [{
             "name": "portfolio_offer_id",
             "source_name": "uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer",
-            "source_column": "id"
+            "source_column": "id",
+            "pk": true,
+            "hk": true
           },
           {
             "name": "dw_last_modified_dt",
@@ -147,15 +150,18 @@
           },
           {
             "name": "effective_from_dt",
-            "transformation": "ifnull(uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer.statuschangeddate,uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer.effective_from_dt)"
+            "transformation": "ifnull(uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer.statuschangeddate,uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer.effective_from_dt)",
+            "pk": true
           },
           {
             "name": "effective_from_dt_csn_seq",
-            "source_column": "effective_from_dt_csn_seq"
+            "source_column": "effective_from_dt_csn_seq",
+            "pk": true
           },
           {
             "name": "effective_from_dt_seq",
-            "source_column": "effective_from_dt_seq"
+            "source_column": "effective_from_dt_seq",
+            "pk": true
           },
           {
             "name": "effective_to_dt",
@@ -163,7 +169,8 @@
           },
           {
             "name": "status_code",
-            "source_column": "status"
+            "source_column": "status",
+            "pk": true
           },
           {
             "name": "status",
@@ -172,7 +179,8 @@
           },
           {
             "name": "reason_code",
-            "source_column": "statusreasoncode"
+            "source_column": "statusreasoncode",
+            "pk": true
           },
           {
             "name": "reason",
@@ -191,6 +199,7 @@
       "task_id": "td_offer_priceable_unit_core",
       "operator": "CreateTable",
       "parameters": {
+        "block_data_check": true,
         "write_disposition": "WRITE_TRUNCATE",
         "destination_table": "td_offer_priceable_unit_core",
         "destination_dataset": "uk_pre_customer_spine_offer_is",
@@ -198,7 +207,8 @@
         "driving_table": "uk_tds_chordiant_eod_is.cc_chordiant_bsbpriceableunit",
         "source_to_target": [{
             "name": "id",
-            "source_column": "id"
+            "source_column": "id",
+            "pk": true
           },
           {
             "name": "dw_last_modified_dt",
@@ -252,15 +262,21 @@
       "task_id": "td_offer_priceable_unit_soip",
       "operator": "CreateTable",
       "parameters": {
+        "block_data_check": true,
+        "target_type": 1,
         "sql": "sql/spine_offer_td_offer_priceable_unit_soip.sql",
         "destination_table": "td_offer_priceable_unit_soip",
-        "destination_dataset": "uk_pre_customer_spine_offer_is"
+        "destination_dataset": "uk_pre_customer_spine_offer_is",
+        "source_to_target": [{
+          "name": "id",
+          "pk": true
+        }]
       },
       "dependencies": []
     },
     {
       "task_id": "truncate_dim_offer_priceable_unit",
-      "operator": "CreateTable",
+      "operator": "TruncateTable",
       "parameters": {
         "sql": "truncate table uk_pub_customer_spine_offer_is.dim_offer_priceable_unit;",
         "destination_table": "dim_offer_priceable_unit"
@@ -271,13 +287,15 @@
       "task_id": "dim_offer_priceable_unit_core",
       "operator": "CreateTable",
       "parameters": {
+        "block_data_check": true,
         "write_disposition": "WRITE_APPEND",
         "destination_table": "dim_offer_priceable_unit",
         "target_type": 1,
         "driving_table": "uk_pre_customer_spine_offer_is.td_offer_priceable_unit_core",
         "source_to_target": [{
             "name": "id",
-            "source_column": "id"
+            "source_column": "id",
+            "pk": true
           },
           {
             "name": "dw_last_modified_dt",
@@ -327,13 +345,15 @@
       "task_id": "dim_offer_priceable_unit_soip",
       "operator": "CreateTable",
       "parameters": {
+        "block_data_check": true,
         "write_disposition": "WRITE_APPEND",
         "destination_table": "dim_offer_priceable_unit",
         "target_type": 1,
         "driving_table": "uk_pre_customer_spine_offer_is.td_offer_priceable_unit_soip",
         "source_to_target": [{
             "name": "id",
-            "source_column": "id"
+            "source_column": "id",
+            "pk": true
           },
           {
             "name": "dw_last_modified_dt",
@@ -380,82 +400,216 @@
       "dependencies": ["truncate_dim_offer_priceable_unit"]
     },
     {
-      "task_id": "td_offer_discount_core_pt1",
-      "operator": "BigQueryOperator",
+      "task_id": "dim_offer_priceable_unit_data_check_row_count",
+      "operator": "DataCheck",
       "parameters": {
+        "sql": "select count(*) from uk_pub_customer_spine_offer_is.dim_offer_priceable_unit"
+      },
+      "dependencies": ["dim_offer_priceable_unit_soip","dim_offer_priceable_unit_core"]
+    },
+    {
+      "operator": "DataCheck",
+      "task_id": "dim_offer_priceable_unit_data_check_duplicate_records",
+      "parameters": {
+        "sql": "sql/data_check_duplicate_records.sql",
+        "params": {
+          "DATASET_ID": "uk_pub_customer_spine_offer_is",
+          "FROM": "dim_offer_priceable_unit",
+          "KEY": ["id"]
+        }
+      },
+      "dependencies": ["dim_offer_priceable_unit_soip","dim_offer_priceable_unit_core"]
+    },
+    {
+      "task_id": "td_offer_discount_core_pt1",
+      "operator": "CreateTable",
+      "parameters": {
+        "block_data_check": true,
+        "target_type": 2,
         "sql": "sql/spine_offer_td_offer_discount_1.sql",
-        "destination_dataset_table": "",
+        "destination_table": "td_offer_discount_core_pt1",
+        "destination_dataset": "uk_pre_customer_spine_offer_is",
         "write_disposition": "WRITE_TRUNCATE",
-        "create_disposition": "CREATE_IF_NEEDED",
-        "allow_large_results": true,
-        "use_legacy_sql": false
+        "source_to_target": [{
+            "name": "portfolio_offer_id",
+            "pk": true
+          },
+          {
+            "name": "effective_from_dt",
+            "pk": true
+          }
+        ]
       },
       "dependencies": []
     },
     {
       "task_id": "td_offer_discount_core_pt2",
-      "operator": "BigQueryOperator",
+      "operator": "CreateTable",
       "parameters": {
+        "block_data_check": true,
+        "target_type": 2,
         "sql": "sql/spine_offer_td_offer_discount_2.sql",
-        "destination_dataset_table": "",
+        "destination_table": "td_offer_discount_core_pt2",
+        "destination_dataset": "uk_pre_customer_spine_offer_is",
         "write_disposition": "WRITE_TRUNCATE",
-        "create_disposition": "CREATE_IF_NEEDED",
-        "allow_large_results": true,
-        "use_legacy_sql": false
+        "source_to_target": [{
+            "name": "portfolio_offer_id",
+            "pk": true
+          },
+          {
+            "name": "effective_from_dt",
+            "pk": true
+          }
+        ]
       },
       "dependencies": ["td_offer_discount_core_pt1"]
     },
     {
       "task_id": "td_offer_discount_soip",
-      "operator": "BigQueryOperator",
+      "operator": "CreateTable",
       "parameters": {
+        "block_data_check": true,
+        "target_type": 2,
         "sql": "sql/spine_offer_td_offer_discount_soip.sql",
-        "destination_dataset_table": "",
+        "destination_table": "td_offer_discount_soip",
+        "destination_dataset": "uk_pre_customer_spine_offer_is",
         "write_disposition": "WRITE_TRUNCATE",
-        "create_disposition": "CREATE_IF_NEEDED",
-        "allow_large_results": true,
-        "use_legacy_sql": false
+        "source_to_target": [{
+            "name": "portfolio_offer_id",
+            "pk": true
+          },
+          {
+            "name": "effective_from_dt",
+            "pk": true
+          }
+        ]
       },
       "dependencies": []
     },
     {
       "task_id": "dim_offer_discount",
-      "operator": "BigQueryOperator",
+      "operator": "CreateTable",
       "parameters": {
+        "target_type": 2,
         "sql": "sql/spine_offer_dim_offer_discount.sql",
-        "destination_dataset_table": "",
+        "destination_table": "dim_offer_discount",
         "write_disposition": "WRITE_TRUNCATE",
-        "create_disposition": "CREATE_IF_NEEDED",
-        "allow_large_results": true,
-        "use_legacy_sql": false
+        "source_to_target": [{
+            "name": "portfolio_offer_id",
+            "pk": true,
+            "hk": true
+          },
+          {
+            "name": "effective_from_dt",
+            "pk": true
+          }
+        ]
       },
       "dependencies": ["td_offer_discount_core_pt2", "td_offer_discount_soip"]
     },
     {
       "task_id": "td_offer_status_soip",
-      "operator": "BigQueryOperator",
+      "operator": "CreateTable",
       "parameters": {
+        "block_data_check": true,
+        "target_type": 2,
         "sql": "sql/spine_offer_td_offer_status_soip.sql",
-        "destination_dataset_table": "",
+        "destination_table": "td_offer_status_soip",
+        "destination_dataset": "uk_pre_customer_spine_offer_is",
         "write_disposition": "WRITE_TRUNCATE",
-        "create_disposition": "CREATE_IF_NEEDED",
-        "allow_large_results": true,
-        "use_legacy_sql": false
+        "source_to_target": [{
+            "name": "portfolio_offer_id",
+            "pk": true,
+            "hk": true
+          },
+          {
+            "name": "effective_from_dt",
+            "pk": true
+          },
+          {
+            "name": "effective_from_dt_csn_seq",
+            "pk": true
+          },
+          {
+            "name": "effective_from_dt_seq",
+            "pk": true
+          },
+          {
+            "name": "status_code",
+            "pk": true
+          },
+          {
+            "name": "reason_code",
+            "pk": true
+          }
+        ]
       },
       "dependencies": ["another_dag.task_one"]
     },
     {
       "task_id": "dim_offer_status",
-      "operator": "BigQueryOperator",
+      "operator": "CreateTable",
       "parameters": {
+        "target_type": 2,
         "sql": "sql/spine_offer_dim_offer_status.sql",
-        "destination_dataset_table": "",
+        "destination_table": "dim_offer_status",
         "write_disposition": "WRITE_TRUNCATE",
-        "create_disposition": "CREATE_IF_NEEDED",
-        "allow_large_results": true,
-        "use_legacy_sql": false
+        "source_to_target": [{
+            "name": "portfolio_offer_id",
+            "pk": true,
+            "hk": true
+          },
+          {
+            "name": "effective_from_dt",
+            "pk": true
+          },
+          {
+            "name": "effective_from_dt_csn_seq",
+            "pk": true
+          },
+          {
+            "name": "effective_from_dt_seq",
+            "pk": true
+          },
+          {
+            "name": "status_code",
+            "pk": true
+          },
+          {
+            "name": "reason_code",
+            "pk": true
+          }
+        ]
       },
       "dependencies": ["td_offer_status_core", "td_offer_status_soip"]
+    },
+    {
+      "operator": "DataCheck",
+      "task_id": "dim_offer_status_data_check_new_value_status_code",
+      "parameters": {
+        "sql": "sql/data_check_new_value.sql",
+        "params": {
+          "DATASET_ID": "uk_pub_customer_spine_offer_is",
+          "FROM": "dim_offer_status",
+          "CHECK_FIELD": "status_code",
+          "DATE_FIELD": "effective_from_dt"
+        }
+      },
+      "dependencies": ["dim_offer_status"]
+    },
+    {
+      "operator": "DataCheck",
+      "task_id": "dim_offer_status_data_check_new_value_reason_code",
+      "parameters": {
+        "sql": "sql/data_check_new_value.sql",
+        "params": {
+          "DATASET_ID": "uk_pub_customer_spine_offer_is",
+          "FROM": "dim_offer_status",
+          "CHECK_FIELD": "reason_code",
+          "DATE_FIELD": "effective_from_dt"
+        }
+      },
+      "dependencies": ["dim_offer_status"]
     }
   ]
 }

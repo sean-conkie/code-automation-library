@@ -1,0 +1,88 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema",
+  "$id": "dag_cfg_datacheck_task_schema.json",
+  "type": "object",
+  "title": "Defines the desired data check task",
+  "required": [
+    "task_id",
+    "operator",
+    "parameters",
+    "dependencies"
+  ],
+  "properties": {
+    "task_id": {
+      "type": "string",
+      "title": "The task_id",
+      "examples": [
+        "dim_offer_type_data_check_duplicate_records"
+      ]
+    },
+    "operator": {
+      "type": "string",
+      "title": "The name of the target operator, can be any standard operator or custom operator.",
+      "examples": [
+        "BigQueryCheckOperator"
+      ]
+    },
+    "parameters": {
+      "type": "object",
+      "title": "",
+      "properties": {
+        "sql": {
+          "type": "string",
+          "title": "A link to the relevant .sql file."
+        },
+        "params": {
+          "type": "object",
+          "title": "Parameter values to be passed to the .sql file.",
+          "properties": {
+            "KEY": {
+              "type": "array",
+              "default": "",
+              "title": "(Optional) The columns making up the primary key.",
+              "items": {
+                  "type": "string",
+                  "title": "A column name."
+                }
+            },
+            "DATASET_ID": {
+              "type": "string",
+              "title": "The source dataset for the table being checked."},
+            "FROM": {
+              "type": "string",
+              "title": "The table being checked."},
+            "DATE_FIELD": {
+              "type": "string",
+              "default": "",
+              "title": "(Optional) Date field to be used in the data check."},
+            "CHECK_FIELD": {
+              "type": "string",
+              "default": "",
+              "title": "(Optional) Name of the field being checked."}
+          },
+          "required": [
+            "DATASET_ID",
+            "FROM"
+          ]
+        },
+        "on_failure_callback": {
+            "type": "string",
+            "default": "",
+            "title": "(Optional) Invoked when the task fails. Default value for all tasks."
+        }
+      },
+      "required": [
+        "sql"
+      ]
+    },
+    "dependencies": {
+      "type": "array",
+      "default": [],
+      "title": "The dependencies of the task",
+      "items": {
+        "type": "string",
+        "title": "A task within the same DAG or another DAG (specified <dag name>.<task id>)"
+      }
+    }
+  }
+}
