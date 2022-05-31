@@ -56,6 +56,17 @@ with DAG(
         schema_object=f"""schema/arc_team.json""",
         dag=dag,
     )
+    delta_table = BigQueryOperator(
+        task_id="delta_table",
+        sql=f"""dags/sql/delta_table.sql""",
+        destination_dataset_table=f"""{dataset_publish}.dim_delta""",
+        write_disposition=f"""WRITE_TRUNCATE""",
+        create_disposition=f"""CREATE_IF_NEEDED""",
+        allow_large_results=True,
+        use_legacy_sql=False,
+        params={"dataset_publish": "f'{dataset_publish}'"},
+        dag=dag,
+    )
     dim_offer_type = BigQueryOperator(
         task_id="dim_offer_type",
         sql=f"""dags/sql/dim_offer_type.sql""",
@@ -247,6 +258,21 @@ with DAG(
         },
         dag=dag,
     )
+    dim_delta_data_check_row_count = BigQueryCheckOperator(
+        task_id="dim_delta_data_check_row_count",
+        sql=f"""select count(*) from uk_pub_customer_spine_offer_is.dim_delta""",
+        dag=dag,
+    )
+    dim_delta_data_check_duplicate_records = BigQueryCheckOperator(
+        task_id="dim_delta_data_check_duplicate_records",
+        sql=f"""sql/data_check_duplicate_records.sql""",
+        params={
+            "DATASET_ID": "uk_pub_customer_spine_offer_is",
+            "FROM": "dim_delta",
+            "KEY": "id",
+        },
+        dag=dag,
+    )
     dim_offer_type_data_check_row_count = BigQueryCheckOperator(
         task_id="dim_offer_type_data_check_row_count",
         sql=f"""select count(*) from uk_pub_customer_spine_offer_is.dim_offer_type""",
@@ -346,6 +372,8 @@ with DAG(
     td_offer_status_soip >> dim_offer_status
     dim_offer_status >> dim_offer_status_data_check_new_value_status_code
     dim_offer_status >> dim_offer_status_data_check_new_value_reason_code
+    delta_table >> dim_delta_data_check_row_count
+    delta_table >> dim_delta_data_check_duplicate_records
     dim_offer_type >> dim_offer_type_data_check_row_count
     dim_offer_type >> dim_offer_type_data_check_duplicate_records
     dim_offer_discount >> dim_offer_discount_data_check_row_count
@@ -359,6 +387,8 @@ with DAG(
     dim_offer_priceable_unit_data_check_duplicate_records >> finish_pipeline
     dim_offer_status_data_check_new_value_status_code >> finish_pipeline
     dim_offer_status_data_check_new_value_reason_code >> finish_pipeline
+    dim_delta_data_check_row_count >> finish_pipeline
+    dim_delta_data_check_duplicate_records >> finish_pipeline
     dim_offer_type_data_check_row_count >> finish_pipeline
     dim_offer_type_data_check_duplicate_records >> finish_pipeline
     dim_offer_discount_data_check_row_count >> finish_pipeline

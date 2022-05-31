@@ -1,3 +1,4 @@
+import copy
 import re
 
 from datetime import datetime
@@ -114,6 +115,124 @@ def create_sql(logger: ILogger, task: dict, dataset_staging: str = None) -> str:
     return outp
 
 
+def create_delta_conditions(logger: ILogger, task: dict) -> list:
+    """
+    > This function creates a list of dictionaries that represent the conditions for the delta load
+
+    Args:
+      logger (ILogger): ILogger - the logger object
+      task (dict): The task dictionary
+
+    Returns:
+      A list of dictionaries.
+    """
+
+    logger.info(f"{pop_stack()} - STARTED".center(100, "-"))
+
+    outp = None
+
+    if "delta" in task["parameters"].keys():
+        delta = task["parameters"]["delta"]
+        logger.debug(f"delta object: {delta}")
+        outp = []
+        if "transformation" in delta["field"].keys():
+            field = delta["field"]["transformation"]
+        else:
+            source_name = (
+                task["parameters"]["driving_table"]
+                if not "source_name" in delta["field"].keys()
+                else delta["field"]["source_name"]
+            )
+            field = f"{source_name}.{delta['field']['source_column']}"
+
+        if delta["lower_bound"] == "$TODAY":
+            lower_bound = "timestamp(current_date)"
+        elif delta["lower_bound"] == "$YESTERDAY":
+            lower_bound = "timestamp(date_sub(current_date, interval 1 day))"
+        elif delta["lower_bound"] == "$THISWEEK":
+            lower_bound = "(select timestamp(date_sub(current_date, interval (if(dayofweek > 1,-2,5) + dayofweek) day)) from (SELECT EXTRACT(DAYOFWEEK FROM current_date) dayofweek))"
+        elif delta["lower_bound"] == "$THISMONTH":
+            lower_bound = "timestamp(date_add(last_day(date_sub(current_date, interval 1 month)), interval 1 day))"
+        else:
+            lower_bound = delta["lower_bound"]
+
+        outp.append(
+            {
+                "operator": ">=",
+                "fields": [field, lower_bound],
+            }
+        )
+
+        if "upper_bound" in delta.keys():
+            upper_bound = (
+                (f"date_add({lower_bound}, interval {delta['upper_bound']} second)")
+                if delta["upper_bound"] > 0
+                else "timestamp(2999-12-31 23:59:59)"
+            )
+            outp.append(
+                {
+                    "operator": "<",
+                    "fields": [field, upper_bound],
+                }
+            )
+
+    logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100, "-"))
+    return outp
+
+
+def create_type_2_delta_condition(logger: ILogger, task: dict) -> dict:
+    """
+    > This function creates a condition for a type 2 delta - used to add
+    all history records for PK which has changed in delta.
+
+    Full history is needed to properly identify if changed occuring in delta
+    should be persisted to target.
+
+    Args:
+      logger (ILogger): ILogger - the logger object
+      task (dict): the task object
+
+    Returns:
+      A dictionary with the operator and fields.
+    """
+
+    logger.info(f"{pop_stack()} - STARTED".center(100, "-"))
+
+    outp = None
+
+    if "delta" in task["parameters"].keys():
+        delta = task["parameters"]["delta"]
+        logger.debug(f"delta object: {delta}")
+        if "transformation" in delta["field"].keys():
+            field = delta["field"]["transformation"]
+        else:
+            source_name = (
+                task["parameters"]["driving_table"]
+                if not "source_name" in delta["field"].keys()
+                else delta["field"]["source_name"]
+            )
+            field = f"{source_name}.{delta['field']['source_column']}"
+
+        if delta["lower_bound"] == "$TODAY":
+            upper_bound = "timestamp(current_date)"
+        elif delta["lower_bound"] == "$YESTERDAY":
+            upper_bound = "timestamp(date_sub(current_date, interval 1 day))"
+        elif delta["lower_bound"] == "$THISWEEK":
+            upper_bound = "(select timestamp(date_sub(current_date, interval (if(dayofweek > 1,-2,5) + dayofweek) day)) from (SELECT EXTRACT(DAYOFWEEK FROM current_date) dayofweek))"
+        elif delta["lower_bound"] == "$THISMONTH":
+            upper_bound = "timestamp(date_add(last_day(date_sub(current_date, interval 1 month)), interval 1 day))"
+        else:
+            upper_bound = delta["lower_bound"]
+
+        outp = {
+            "operator": "<",
+            "fields": [field, upper_bound],
+        }
+
+    logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100, "-"))
+    return outp
+
+
 def create_type_1_sql(
     logger: ILogger, task: dict, target_dataset: str, write_disposition: str
 ) -> list:
@@ -131,6 +250,12 @@ def create_type_1_sql(
       A list of strings
     """
     logger.info(f"{pop_stack()} - STARTED".center(100, "-"))
+
+    delta = create_delta_conditions(logger, task)
+    if delta:
+        for d in delta:
+            task["parameters"]["where"].append(d)
+
     sql = [
         create_table_query(
             logger,
@@ -180,16 +305,93 @@ def create_type_2_sql(
     # first we create p1, this table contains required columns plus previous
     # value for driving tables.  Previous values are used later to complete CDC
     analytics = create_type_2_analytic_list(logger, task)
+    wtask = copy.deepcopy(task)
+
+    delta = create_delta_conditions(logger, task)
+    if delta:
+        for d in delta:
+            wtask["parameters"]["where"].append(d)
+
     sql.append(
         create_table_query(
             logger,
-            task,
+            wtask,
             dataset_staging,
             f"{td_table}_p1",
             "WRITE_TRANSIENT",
             analytics,
         )
     )
+
+    # if delta, take all primary keys identified and add full history to p1
+    if delta:
+        join_on = []
+        for field in task["parameters"]["source_to_target"]:
+            if "hk" in field.keys() and field["hk"] == True:
+                source_name = (
+                    task["parameters"]["driving_table"]
+                    if not "source_name" in field.keys()
+                    else field["source_name"]
+                )
+                source_column = (
+                    ""
+                    if not "source_column" in field.keys()
+                    else field["source_column"]
+                )
+                if "source_column" in field.keys():
+                    source = f"{source_name}.{source_column}"
+                else:
+                    transformation = field["transformation"]
+                    source = transformation
+
+                join_on.append(
+                    {
+                        "operator": "=",
+                        "fields": [
+                            f"{dataset_staging}.{td_table}_p1.{field['name']}",
+                            f"{source}",
+                        ],
+                    }
+                )
+
+        delta_join = {
+            "type": "inner",
+            "right": f"{dataset_staging}.{td_table}_p1",
+            "on": join_on,
+        }
+
+        delta_task = {
+            "parameters": {
+                "write_disposition": "WRITE_APPEND",
+                "driving_table": task["parameters"]["driving_table"],
+                "source_to_target": task["parameters"]["source_to_target"],
+            }
+        }
+
+        if "joins" in task["parameters"].keys():
+            delta_task["parameters"]["joins"] = [j for j in task["parameters"]["joins"]]
+            delta_task["parameters"]["joins"].append(delta_join)
+        else:
+            delta_task["parameters"]["joins"] = [delta_join]
+
+        delta_where = create_type_2_delta_condition(logger, task)
+
+        if "joins" in task["parameters"].keys():
+            delta_task["parameters"]["where"] = [w for w in task["parameters"]["where"]]
+            delta_task["parameters"]["where"].append(delta_where)
+        else:
+            delta_task["parameters"]["where"] = [delta_where]
+
+        sql.append(
+            create_table_query(
+                logger,
+                delta_task,
+                dataset_staging,
+                f"{td_table}_p1",
+                "WRITE_APPEND",
+                analytics,
+            )
+        )
 
     logger.info(
         f'{pop_stack()} - create sql for transient table, complete CDC - "{dataset_staging}.{td_table}_p2"'
@@ -347,21 +549,7 @@ def create_table_query(
     sql = []
     # create working task object so it can be edited without impacting
     # original
-    wtask = {
-        "parameters": {
-            "destination_table": task["parameters"]["destination_table"]
-            if "desitnation_table" in task["parameters"].keys()
-            else "",
-            "driving_table": task["parameters"]["driving_table"],
-            "source_to_target": [c for c in task["parameters"]["source_to_target"]],
-        }
-    }
-
-    if "joins" in task["parameters"].keys():
-        wtask["parameters"]["joins"] = [j for j in task["parameters"]["joins"]]
-
-    if "where" in task["parameters"].keys():
-        wtask["parameters"]["where"] = [w for w in task["parameters"]["where"]]
+    wtask = copy.deepcopy(task)
 
     join_char = ",\n"
     # we need to create a list of insert columns for insert into statements

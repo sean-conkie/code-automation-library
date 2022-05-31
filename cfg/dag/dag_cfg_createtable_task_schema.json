@@ -232,6 +232,47 @@
               }]
             }
           }
+        },
+        "delta": {
+          "type": "object",
+          "title": "Defines the conditions to be applied when transforming a delta.",
+          "required": [
+            "field",
+            "lower_bound"
+          ],
+          "properties": {
+            "field": {
+              "type": "object",
+              "title": "The field that date condition is to be applied to",
+              "properties": {
+                "source_column": {
+                  "type": "string",
+                  "title": "(Conditional - source_column OR transformation) The source column name"
+                },
+                "transformation": {
+                  "type": "string",
+                  "title": "(Conditional - source_column OR transformation) Defines the transformation of the column, not including joins.",
+                  "examples": [
+                    "current_timestamp()",
+                    "ifnull(uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer.statuschangeddate,uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer.effective_from_dt)",
+                    "abs(uk_tds_chordiant_eod_is.cc_chordiant_bsbpriceableunit.quotedprice)"
+                  ]
+                },
+                "source_name": {
+                  "type": "string",
+                  "title": "(Optional) The source table name - defaults to driving_table"
+                }
+              }
+            },
+            "lower_bound": {
+              "type": "string",
+              "title": "The lower date to be used when applying the condition.  Can be a function returning a datetime (i.e. current_timestamp()) or one of $YESTERDAY/$TODAY/$LASTWEEK/$THISMONTH"
+            },
+            "upper_bound": {
+              "type": "number",
+              "title": "The variance in seconds to be applied to the lower_bound (1 day = 86400 seconds), use 0 for high date."
+            }
+          }
         }
       },
       "write_disposition": {

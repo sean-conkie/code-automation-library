@@ -26,6 +26,86 @@
       "dependencies": []
     },
     {
+      "task_id": "delta_table",
+      "operator": "CreateTable",
+      "parameters": {
+        "destination_table": "dim_delta",
+        "target_type": 1,
+        "driving_table": "uk_tds_refdata_eod_is.cc_refdata_bsboffertooffertype",
+        "joins": [{
+          "right": "uk_tds_refdata_eod_is.cc_refdata_bsboffertype",
+          "on": [{
+              "operator": "=",
+              "fields": ["uk_tds_refdata_eod_is.cc_refdata_bsboffertooffertype.offertypeid", "uk_tds_refdata_eod_is.cc_refdata_bsboffertype.id"]
+            },
+            {
+              "operator": "<>",
+              "fields": ["uk_tds_refdata_eod_is.cc_refdata_bsboffertype.rdmaction", "'D'"]
+            }
+          ]
+        }],
+        "source_to_target": [{
+            "name": "id",
+            "source_column": "id",
+            "pk": true
+          },
+          {
+            "name": "dw_last_modified_dt",
+            "transformation": "current_timestamp()"
+          },
+          {
+            "name": "offer_detail_id",
+            "source_column": "offerid"
+          },
+          {
+            "name": "offer_type_id",
+            "source_column": "offertypeid"
+          },
+          {
+            "name": "offer_type_id",
+            "source_column": "offertypeid"
+          },
+          {
+            "name": "created_dt",
+            "source_column": "created"
+          },
+          {
+            "name": "created_by_id",
+            "source_column": "createdby"
+          },
+          {
+            "name": "last_modified_dt",
+            "source_column": "lastupdate"
+          },
+          {
+            "name": "last_modified_by_id",
+            "source_column": "updatedby"
+          },
+          {
+            "name": "code",
+            "source_name": "uk_tds_refdata_eod_is.cc_refdata_bsboffertype",
+            "source_column": "code"
+          },
+          {
+            "name": "description",
+            "source_name": "uk_tds_refdata_eod_is.cc_refdata_bsboffertype",
+            "source_column": "description"
+          }
+        ],
+        "where": [{
+          "operator": "<>",
+          "fields": ["uk_tds_refdata_eod_is.cc_refdata_bsboffertooffertype.rdmaction", "'D'"]
+        }],
+        "delta": {
+          "field": {
+            "source_column": "lastupdate"
+          },
+          "lower_bound": "$YESTERDAY",
+          "upper_bound": 86400
+        }
+      }
+    },
+    {
       "task_id": "dim_offer_type",
       "operator": "CreateTable",
       "parameters": {
@@ -203,7 +283,14 @@
         "where": [{
           "operator": "=",
           "fields": ["uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer.logically_deleted", "0"]
-        }]
+        }],
+        "delta": {
+          "field": {
+            "source_column": "lastupdate"
+          },
+          "lower_bound": "$YESTERDAY",
+          "upper_bound": 86400
+        }
       },
       "dependencies": []
     },
