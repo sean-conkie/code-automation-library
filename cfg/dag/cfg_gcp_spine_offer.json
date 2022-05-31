@@ -103,7 +103,8 @@
           "lower_bound": "$YESTERDAY",
           "upper_bound": 86400
         }
-      }
+      },
+      "dependencies": []
     },
     {
       "task_id": "dim_offer_type",
