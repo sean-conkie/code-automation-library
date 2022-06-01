@@ -188,13 +188,13 @@ def create_data_check_tasks(logger: ILogger, task: dict, properties: dict) -> li
         table_keys = [
             field["name"]
             for field in task["parameters"]["source_to_target"]
-            if "pk" in field.keys() and field["pk"] == True
+            if "pk" in field.keys()
         ]
 
         history_keys = [
             field["name"]
             for field in task["parameters"]["source_to_target"]
-            if "hk" in field.keys() and field["hk"] == True
+            if "hk" in field.keys()
         ]
     else:
         table_keys = []
@@ -398,6 +398,11 @@ def create_table_task(logger: ILogger, task: dict, properties: dict) -> dict:
     if "sql" in task["parameters"].keys():
         sql = task["parameters"]["sql"]
     else:
+        task["parameters"]["source_to_target"] = [
+            field
+            for field in task["parameters"]["source_to_target"]
+            if not field["name"] in ["dw_created_dt", "dw_last_modified_dt"]
+        ]
         file_path = create_sql_file(logger, task, dataset_staging=dataset_staging)
         sql = f"{file_path.replace('./','')}"
 

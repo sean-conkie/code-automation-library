@@ -170,7 +170,7 @@
               },
               "pk": {
                 "type": "boolean",
-                "title": "Set with a true value to identify field as part of table key; no value, no field or false are all interpereted as false"
+                "title": "Indicates field is part of the 'primary' key, which defines each unique record in the target table."
               },
               "hk": {
                 "type": "boolean",
