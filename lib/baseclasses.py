@@ -1,6 +1,6 @@
 from enum import Enum
 
-__all__ = ["Condition", "Join"]
+__all__ = ["Condition", "Field", "Task", "LogicOperator" "Join"]
 
 
 class LogicOperator(Enum):
@@ -17,21 +17,33 @@ class Operator(Enum):
     GT = ">"
     GE = ">="
     NE = "!="
+    LG = "<>"
     LT = "<"
     LE = "<="
+    NONE = None
+
+
+class WriteDisposition(Enum):
+    WRITE_APPEND = "WRITE_APPEND"
+    WRITE_TRANSIENT = "WRITE_TRANSIENT"
+    WRITE_TRUNCATE = "WRITE_TRUNCATE"
 
 
 class Condition:
-    operator = None
     fields = None
     condition = LogicOperator.NONE
+    operator = Operator.NONE
 
     def __init__(
-        self, operator: Operator, fields: list, condition: LogicOperator = LogicOperator.NONE
+        self,
+        fields: list[str],
+        condition: LogicOperator = LogicOperator.NONE,
+        operator: Operator = Operator.NONE,
     ) -> None:
 
-        self.operator = operator
         self.fields = fields
+        self.condition = condition
+        self.operator = operator
 
     def __str__(self) -> str:
         return f"{self.fields[0]} {self.operator.value} {self.fields[1]}"
@@ -47,6 +59,38 @@ class Join:
         self.left = left
         self.right = right
         self.on = on
+
+
+class Field:
+    name = None
+    source_column = None
+    source_name = None
+    transformation = None
+    pk = None
+    hk = None
+
+    def __init__(
+        self,
+        name: str,
+        source_column: str = None,
+        source_name: str = None,
+        transformation: str = None,
+        pk: bool = None,
+        hk: bool = None,
+    ) -> None:
+        if transformation:
+            self.transformation = transformation
+        elif source_column:
+            self.source_column = source_column
+            self.source_name = source_name
+        else:
+            raise ValueError(
+                "Either 'transformation' or 'source_name' must be provided."
+            )
+
+        self.name = name
+        self.pk = pk
+        self.hk = hk
 
 
 class Task:

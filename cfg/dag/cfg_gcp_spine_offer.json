@@ -39,7 +39,7 @@
               "fields": ["uk_tds_refdata_eod_is.cc_refdata_bsboffertooffertype.offertypeid", "uk_tds_refdata_eod_is.cc_refdata_bsboffertype.id"]
             },
             {
-              "operator": "<>",
+              "operator": "!=",
               "fields": ["uk_tds_refdata_eod_is.cc_refdata_bsboffertype.rdmaction", "'D'"]
             }
           ]
@@ -93,7 +93,7 @@
           }
         ],
         "where": [{
-          "operator": "<>",
+          "operator": "!=",
           "fields": ["uk_tds_refdata_eod_is.cc_refdata_bsboffertooffertype.rdmaction", "'D'"]
         }],
         "delta": {
@@ -120,7 +120,7 @@
               "fields": ["uk_tds_refdata_eod_is.cc_refdata_bsboffertooffertype.offertypeid", "uk_tds_refdata_eod_is.cc_refdata_bsboffertype.id"]
             },
             {
-              "operator": "<>",
+              "operator": "!=",
               "fields": ["uk_tds_refdata_eod_is.cc_refdata_bsboffertype.rdmaction", "'D'"]
             }
           ]
@@ -174,7 +174,7 @@
           }
         ],
         "where": [{
-          "operator": "<>",
+          "operator": "!=",
           "fields": ["uk_tds_refdata_eod_is.cc_refdata_bsboffertooffertype.rdmaction", "'D'"]
         }]
       },

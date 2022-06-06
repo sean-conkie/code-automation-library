@@ -1,9 +1,10 @@
+from ast import operator
 import copy
 import re
 
 from datetime import datetime
 from jinja2 import Environment, FileSystemLoader
-from lib.baseclasses import Condition, Join, LogicOperator
+from lib.baseclasses import Condition, Field, Join, LogicOperator, Operator
 from lib.logger import ILogger, pop_stack
 
 __all__ = [
@@ -27,9 +28,9 @@ class UpdateTask:
     target_table = None
     source_dataset = None
     source_table = None
-    keys = None
-    fields = None
-    where = []
+    source_to_target = None
+    where = None
+    tables = None
 
     def __init__(
         self,
@@ -37,17 +38,17 @@ class UpdateTask:
         target_table: str,
         source_dataset: str,
         source_table: str,
-        keys: list,
-        fields: list,
-        where: list[Condition] = [],
+        source_to_target: list[Field],
+        tables: dict,
+        where: list[Condition],
     ) -> None:
 
         self.target_dataset = target_dataset
         self.target_table = target_table
         self.source_dataset = source_dataset
         self.source_table = source_table
-        self.keys = keys
-        self.fields = fields
+        self.source_to_target = source_to_target
+        self.tables = tables
         self.where = where
 
 
@@ -415,6 +416,10 @@ def create_type_1_sql(
             }
         )
 
+        for f in iitask["parameters"]["source_to_target"]:
+            if f["name"] in keys:
+                f["pk"] = None
+
         sql.append(
             create_table_query(
                 logger,
@@ -426,27 +431,58 @@ def create_type_1_sql(
         )
 
         # for all updates (row_action = 2) create an update query
-        fields = [
-            {"source": field["name"], "target": field["name"], "prefix": None}
+        source_to_target = [
+            Field(
+                field["name"],
+                source_column=field["name"],
+                source_name=iitask["parameters"]["driving_table"],
+            )
             for field in task["parameters"]["source_to_target"]
             if "pk" not in field.keys()
         ]
-        fields.append(
+        source_to_target.append(
+            Field("dw_last_modified_dt", transformation="current_timestamp()")
+        )
+
+        update_conditions = [
+            Condition(
+                [
+                    f"{target_dataset}.{iitask['parameters']['destination_table']}.{field['name']}",
+                    f"{dataset_staging}.{dtask['parameters']['destination_table']}.{field['name']}",
+                ],
+                operator=Operator["EQ"],
+            )
+            for field in iitask["parameters"]["source_to_target"]
+            if "pk" in field.keys()
+        ]
+
+        update_conditions.append(
+            Condition(
+                [
+                    f"{iitask['parameters']['driving_table']}.row_action",
+                    "2",
+                ],
+                operator=Operator["EQ"],
+            )
+        )
+
+        utask = UpdateTask(
+            target_dataset,
+            task["parameters"]["destination_table"],
+            dataset_staging,
+            dtask["parameters"]["destination_table"],
+            source_to_target,
             {
-                "source": f"current_timestamp()",
-                "target": "dw_last_modified_dt",
-            }
+                f"{iitask['parameters']['driving_table']}": "src",
+                f"{target_dataset}.{iitask['parameters']['destination_table']}": "trg",
+            },
+            update_conditions,
         )
 
         sql.append(
             create_update_query(
                 logger,
-                target_dataset,
-                iitask["parameters"]["destination_table"],
-                dataset_staging,
-                iitask["parameters"]["driving_table"],
-                keys,
-                fields,
+                utask,
             )
         )
 
@@ -896,17 +932,36 @@ def create_update_query(logger: ILogger, task: UpdateTask) -> str:
 
     outp = [f"update {task.target_dataset}.{task.target_table} trg"]
     st = []
-    for i, f in enumerate(task.fields):
+    pad = max([len(f.name) for f in task.source_to_target])
+
+    for i, f in enumerate(task.source_to_target):
         prefix = "   set " if i == 0 else "       "
-        source_prefix = f"src." if "prefix" in f.keys() else ""
-        st.append(f"{prefix}trg.{f['target']} = {source_prefix}{f['source']}")
+        source_name = (
+            f.source_name
+            if f.source_name
+            else f"{task.source_dataset}.{task.source_table}"
+        )
+        source_column = "" if not f.source_column else f.source_column
+
+        if f.source_column:
+            source = f"{task.tables[source_name]}.{source_column}"
+        else:
+            transformation = f.transformation
+            for key in task.tables.keys():
+                transformation = transformation.replace(key, task.tables[key])
+
+            source = transformation
+        target_table = f"{task.target_dataset}.{task.target_table}"
+        target = f"{task.tables[target_table]}.{f.name.ljust(pad)}"
+
+        st.append(f"{prefix}{target} = {source}")
+
     outp.append(",\n".join(st))
-    outp.append(f"  from {task.source_dataset}.{task.source_table} src")
+    source_table = f"{task.source_dataset}.{task.source_table}"
+    outp.append(f"  from {source_table} {task.tables[source_table]}")
 
-    for i, k in enumerate(task.keys):
-        prefix = " where " if i == 0 else "   and "
-        outp.append(f"{prefix}trg.{k[0]} = src.{k[1]}")
-
+    outp.append("\n".join(create_sql_where(logger, task.where, task.tables)))
+    outp.append(";\n")
     logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100, "-"))
     return "\n".join(outp)
 
@@ -1038,9 +1093,17 @@ def create_sql_conditions(logger: ILogger, task: dict) -> dict:
         create_sql_where(
             logger,
             [
-                Condition(c["operator"], c["fields"], LogicOperator(c["condition"]))
-                if "condition" in c.tasks()
-                else Condition(c["operator"], c["fields"], LogicOperator["NONE"])
+                Condition(
+                    c["fields"],
+                    condition=LogicOperator(c["condition"]),
+                    operator=Operator(c["operator"]),
+                )
+                if "condition" in c.keys()
+                else Condition(
+                    c["fields"],
+                    condition=LogicOperator["NONE"],
+                    operator=Operator(c["operator"]),
+                )
                 for c in task["parameters"]["where"]
             ],
             tables,
@@ -1080,7 +1143,7 @@ def create_sql_where(
     for i, condition in enumerate(conditions):
         if i == 0:
             prefix = " where "
-        elif condition.condition:
+        elif condition.condition.value:
             prefix = f"{condition.condition.value.rjust(6)} "
         else:
             prefix = "   and "
