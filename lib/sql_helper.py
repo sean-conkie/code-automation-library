@@ -363,6 +363,7 @@ def create_type_1_sql(
                 "name": "row_action",
             }
         )
+
         dest = f'{task["parameters"]["destination_table"]}_p2'
         dtask["parameters"][
             "destination_table"
@@ -656,17 +657,21 @@ def create_type_2_sql(
     logger.info(
         f'{pop_stack()} - create sql for transient table, add/replace effective_to_dt with lead - "{dataset_staging}.{td_table}"'
     )
+
     # final step takes the data following the CDC and adds the effective_to_dt
     td_task = {
         "parameters": {
             "write_disposition": "WRITE_TRUNCATE",
             "driving_table": f"{dataset_staging}.{td_table}_p2",
             "source_to_target": [
-                {"name": c["name"], "source_column": c["name"]}
+                {"name": c["name"], "source_column": c["name"], "pk": c["pk"]}
+                if "pk" in c.keys()
+                else {"name": c["name"], "source_column": c["name"]}
                 for c in task["parameters"]["source_to_target"]
             ],
         }
     }
+
     analytics = [
         {
             "type": "lead",
@@ -689,20 +694,153 @@ def create_type_2_sql(
                     "source_column": "effective_from_dt_seq",
                 },
             ],
-            "offset": ", 1",
-            "default": ", timestamp('2999-12-31 23:59:59')",
+            "offset": "1",
+            "default": "timestamp('2999-12-31 23:59:59')",
         }
     ]
-    sql.append(
-        create_table_query(
-            logger,
-            td_task,
-            target_dataset,
-            f"{td_table}",
-            write_disposition,
-            analytics,
+
+    if delta:
+        td_task["parameters"]["write_disposition"] = "WRITE_TRANSIENT"
+
+        keys = [
+            field["name"]
+            for field in td_task["parameters"]["source_to_target"]
+            if "pk" in field.keys()
+        ]
+
+        td_task["parameters"]["joins"] = [
+            {
+                "right": f"{target_dataset}.{task['parameters']['destination_table']}",
+                "on": [
+                    {
+                        "operator": "=",
+                        "fields": [
+                            f"{target_dataset}.{task['parameters']['destination_table']}.{k}",
+                            f"{td_task['parameters']['driving_table']}.{k}",
+                        ],
+                    }
+                    for k in keys
+                ],
+            }
+        ]
+
+        td_task["parameters"]["source_to_target"].append(
+            {
+                "transformation": f"if({target_dataset}.{task['parameters']['destination_table']}.{keys[0]} is null, 1, 2)",
+                "name": "row_action",
+            }
         )
-    )
+
+        td_task["parameters"]["destination_table"] = f"{dataset_staging}.{td_table}_p3"
+
+        sql.append(
+            create_table_query(
+                logger,
+                td_task,
+                target_dataset,
+                f"{td_table}_p3",
+                "WRITE_TRANSIENT",
+                analytics,
+            )
+        )
+
+        ii_task = {
+            "parameters": {
+                "write_disposition": "WRITE_APPEND",
+                "driving_table": f"{dataset_staging}.{td_table}_p3",
+                "source_to_target": [
+                    {"name": c["name"], "source_column": c["name"], "pk": c["pk"]}
+                    if "pk" in c.keys()
+                    else {"name": c["name"], "source_column": c["name"]}
+                    for c in task["parameters"]["source_to_target"]
+                ],
+                "where": [
+                    {
+                        "operator": "=",
+                        "fields": [
+                            f"{dataset_staging}.{td_table}_p3.row_action",
+                            "1",
+                        ],
+                    }
+                ],
+            }
+        }
+
+        sql.append(
+            create_table_query(
+                logger,
+                ii_task,
+                target_dataset,
+                f"{td_table}",
+                "WRITE_APPEND",
+            )
+        )
+
+        # for all updates (row_action = 2) create an update query
+        source_to_target = [
+            Field(
+                "effective_to_dt",
+                source_column="effective_to_dt",
+                source_name=f"{dataset_staging}.{td_table}_p3",
+            )
+        ]
+        source_to_target.append(
+            Field("dw_last_modified_dt", transformation="current_timestamp()")
+        )
+
+        update_conditions = [
+            Condition(
+                [
+                    f"{target_dataset}.{td_table}.{field['name']}",
+                    f"{dataset_staging}.{td_table}_p3.{field['name']}",
+                ],
+                operator=Operator["EQ"],
+            )
+            for field in ii_task["parameters"]["source_to_target"]
+            if "pk" in field.keys()
+        ]
+
+        update_conditions.append(
+            Condition(
+                [
+                    f"{dataset_staging}.{td_table}_p3.row_action",
+                    "2",
+                ],
+                operator=Operator["EQ"],
+            )
+        )
+
+        utask = UpdateTask(
+            target_dataset,
+            task["parameters"]["destination_table"],
+            dataset_staging,
+            f"{td_table}_p3",
+            source_to_target,
+            {
+                f"{ii_task['parameters']['driving_table']}": "src",
+                f"{dataset_staging}.{td_table}": "trg",
+            },
+            update_conditions,
+        )
+
+        sql.append(
+            create_update_query(
+                logger,
+                utask,
+            )
+        )
+
+    else:
+        sql.append(
+            create_table_query(
+                logger,
+                td_task,
+                target_dataset,
+                f"{td_table}",
+                write_disposition,
+                analytics,
+            )
+        )
 
     logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100, "-"))
     return sql
@@ -928,6 +1066,16 @@ insert into"""
 
 
 def create_update_query(logger: ILogger, task: UpdateTask) -> str:
+    """
+    > It creates an update query for a given update task
+
+    Args:
+      logger (ILogger): ILogger - a logger object that will be used to log messages
+      task (UpdateTask): UpdateTask
+
+    Returns:
+      A string that is a SQL query.
+    """
     logger.info(f"{pop_stack()} - STARTED".center(100, "-"))
 
     outp = [f"update {task.target_dataset}.{task.target_table} trg"]
@@ -1076,6 +1224,8 @@ def create_sql_conditions(logger: ILogger, task: dict) -> dict:
             frm.append(
                 f"{join_type.rjust(6)} join {join['right']} {tables[join['right']]}"
             )
+
+            pad = max([len(c["fields"][0]) for c in join["on"]])
             for j, condition in enumerate(join["on"]):
                 on_prefix = "(    " if len(join["on"]) > 1 and j == 0 else ""
                 on_suffix = (
@@ -1086,7 +1236,7 @@ def create_sql_conditions(logger: ILogger, task: dict) -> dict:
                 left = f"{condition['fields'][0].replace(left_table,f'{tables[left_table]}').replace(right_table,f'{tables[right_table]}')}"
                 right = f"{condition['fields'][1].replace(left_table,f'{tables[left_table]}').replace(right_table,f'{tables[right_table]}')}"
                 frm.append(
-                    f"{prefix}{on_prefix}{left} {condition['operator']} {right}{on_suffix}"
+                    f"{prefix}{on_prefix}{left.ljust(pad)} {condition['operator']} {right}{on_suffix}"
                 )
 
     where = (
@@ -1140,6 +1290,16 @@ def create_sql_where(
     )
 
     where = []
+    pattern = r"^((?P<table>[a-zA-Z0-9_\{\}]+\.[a-zA-Z0-9_\{\}]+)(?:\.))?(?P<column>[a-zA-Z0-9_%'(), ]+)$"
+
+    # for each condition, replace table names with alias
+    for c in conditions:
+        for i, f in enumerate(c.fields):
+            m = re.search(pattern, f, re.IGNORECASE)
+            if m.group("table"):
+                c.fields[i] = f"{tables[m.group('table')]}.{m.group('column')}"
+
+    pad = max([len(c.fields[0]) for c in conditions]) if len(conditions) > 0 else 0
     for i, condition in enumerate(conditions):
         if i == 0:
             prefix = " where "
@@ -1148,23 +1308,12 @@ def create_sql_where(
         else:
             prefix = "   and "
 
-        left_table_list = condition.fields[0].split(".")
-        right_table_list = condition.fields[1].split(".")
+        left_table = condition.fields[0]
+        right_table = condition.fields[1]
 
-        left_table = (
-            f"{left_table_list[0]}.{left_table_list[1]}"
-            if len(left_table_list) > 1
-            else ""
+        where.append(
+            f"{prefix}{left_table.ljust(pad)} {condition.operator.value} {right_table}"
         )
-        right_table = (
-            f"{right_table_list[0]}.{right_table_list[1]}"
-            if len(right_table_list) > 1
-            else ""
-        )
-
-        left = f"{condition.fields[0].replace(left_table,f'{tables[left_table] if left_table in tables.keys() else left_table}')}"
-        right = f"{condition.fields[1].replace(right_table,f'{tables[right_table] if right_table in tables.keys() else right_table}')}"
-        where.append(f"{prefix}{left} {condition.operator.value} {right}")
 
     logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100, "-"))
     return where
