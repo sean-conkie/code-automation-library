@@ -10,6 +10,9 @@ __all__ = [
     "Join",
     "Operator",
     "JoinType",
+    "WriteDisposition",
+    "SQLTaskOperator",
+    "SQLTask",
 ]
 
 
@@ -44,6 +47,16 @@ class WriteDisposition(Enum):
     WRITE_APPEND = "WRITE_APPEND"
     WRITE_TRANSIENT = "WRITE_TRANSIENT"
     WRITE_TRUNCATE = "WRITE_TRUNCATE"
+
+
+class SQLTaskOperator(Enum):
+    CREATETABLE = "CreateTable"
+    TRUNCATETABLE = "TruncateTable"
+    DATACHECK = "DataCheck"
+    LOADFROMGCS = "LoadFromGCS"
+    GCSTOBQ = "GoogleCloudStorageToBigQueryOperator"
+    BQCHEK = "BigQueryCheckOperator"
+    BQOPERATOR = "BigQueryOperator"
 
 
 class Condition(object):
@@ -183,7 +196,7 @@ class Join(object):
 class Field(object):
     def __init__(
         self,
-        name: str,
+        name: str = None,
         source_column: str = None,
         source_name: str = None,
         transformation: str = None,
@@ -350,3 +363,363 @@ class Task(object):
         Sets the dependencies
         """
         self._dependencies = value
+
+
+class Delta(object):
+    def __init__(self, field: Field, lower_bound: str, upper_bound: int = None) -> None:
+        self._field = field
+        self._lower_bound = lower_bound
+        self._upper_bound = upper_bound
+
+    @property
+    def field(self) -> Field:
+        """Returns the field"""
+        return self._field
+
+    @field.setter
+    def field(self, value: Field) -> None:
+        """Sets the field"""
+        self._field = value
+
+    @property
+    def lower_bound(self) -> str:
+        """Returns the lower_bound"""
+        return self._lower_bound
+
+    @lower_bound.setter
+    def lower_bound(self, value: str) -> None:
+        """Sets the lower_bound"""
+        self._lower_bound = value
+
+    @property
+    def upper_bound(self) -> int:
+        """Returns the upper_bound"""
+        return self._upper_bound
+
+    @upper_bound.setter
+    def upper_bound(self, value: int) -> None:
+        """Sets the upper_bound"""
+        self._upper_bound = value
+
+
+class History(object):
+    def __init__(
+        self, partition: Field, driving_column: list[Field], order: list[Field]
+    ) -> None:
+        self._partition = partition
+        self._driving_column = driving_column
+        self._order = order
+
+    @property
+    def partition(self) -> Field:
+        """Returns the partition"""
+        return self._partition
+
+    @partition.setter
+    def partition(self, value: Field) -> None:
+        """Sets the partition"""
+        self._partition = value
+
+    @property
+    def driving_column(self) -> Field:
+        """Returns the driving_column"""
+        return self._driving_column
+
+    @driving_column.setter
+    def driving_column(self, value: Field) -> None:
+        """Sets the driving_column"""
+        self._driving_column = value
+
+    @property
+    def order(self) -> list[Field]:
+        """Returns the order"""
+        return self._order
+
+    @order.setter
+    def order(self, value: list[Field]) -> None:
+        """Sets the order"""
+        self._order = value
+
+
+# > This class is used to create a SQL query that updates a target table with data from a source table
+class UpdateTask(object):
+    def __init__(
+        self,
+        target_dataset: str,
+        target_table: str,
+        source_dataset: str,
+        source_table: str,
+        source_to_target: list[Field],
+        tables: dict,
+        where: list[Condition],
+    ) -> None:
+
+        self._target_dataset = target_dataset
+        self._target_table = target_table
+        self._source_dataset = source_dataset
+        self._source_table = source_table
+        self._source_to_target = source_to_target
+        self._tables = tables
+        self._where = where
+
+    @property
+    def target_dataset(self):
+        """
+        Returns the target_dataset
+        """
+        return self._target_dataset
+
+    @target_dataset.setter
+    def target_dataset(self, value):
+        """
+        Sets the target_dataset
+        """
+        self._target_dataset = value
+
+    @property
+    def target_table(self):
+        """
+        Returns the target_table
+        """
+        return self._target_table
+
+    @target_table.setter
+    def target_table(self, value):
+        """
+        Sets the target_table
+        """
+        self._target_table = value
+
+    @property
+    def source_dataset(self):
+        """
+        Returns the source_dataset
+        """
+        return self._source_dataset
+
+    @source_dataset.setter
+    def source_dataset(self, value):
+        """
+        Sets the source_dataset
+        """
+        self._source_dataset = value
+
+    @property
+    def source_table(self):
+        """
+        Returns the source_table
+        """
+        return self._source_table
+
+    @source_table.setter
+    def source_table(self, value):
+        """
+        Sets the source_table
+        """
+        self._source_table = value
+
+    @property
+    def source_to_target(self):
+        """
+        Returns the source_to_target
+        """
+        return self._source_to_target
+
+    @source_to_target.setter
+    def source_to_target(self, value):
+        """
+        Sets the source_to_target
+        """
+        self._source_to_target = value
+
+    @property
+    def tables(self):
+        """
+        Returns the tables
+        """
+        return self._tables
+
+    @tables.setter
+    def tables(self, value):
+        """
+        Sets the tables
+        """
+        self._tables = value
+
+    @property
+    def where(self):
+        """
+        Returns the where
+        """
+        return self._where
+
+    @where.setter
+    def where(self, value):
+        """
+        Sets the where
+        """
+        self._where = value
+
+
+class SQLParameter(object):
+    def __init__(
+        self,
+        destination_table: str,
+        target_type: int,
+        driving_table: str,
+        source_to_target: list[Field],
+        write_disposition: WriteDisposition,
+        sql: str,
+        joins: list[Join] = None,
+        where: list[Condition] = None,
+        delta: Delta = None,
+        destination_dataset: str = None,
+        history: History = None,
+        block_data_check: bool = False,
+    ) -> None:
+        self._block_data_check = block_data_check
+        self._destination_table = destination_table
+        self._target_type = target_type
+        self._driving_table = driving_table
+        self._source_to_target = source_to_target
+        self._write_disposition = write_disposition
+        self._sql = sql
+        self._joins = joins
+        self._where = where
+        self._delta = delta
+        self._destination_dataset = destination_dataset
+        self._history = history
+
+    @property
+    def block_data_check(self) -> bool:
+        """Returns the block_data_check"""
+        return self._block_data_check
+
+    @block_data_check.setter
+    def block_data_check(self, value: bool) -> None:
+        """Sets the block_data_check"""
+        self._block_data_check = value
+
+    @property
+    def destination_table(self) -> str:
+        """Returns the destination_table"""
+        return self._destination_table
+
+    @destination_table.setter
+    def destination_table(self, value: str) -> None:
+        """Sets the destination_table"""
+        self._destination_table = value
+
+    @property
+    def target_type(self) -> str:
+        """Returns the target_type"""
+        return self._target_type
+
+    @target_type.setter
+    def target_type(self, value: str) -> None:
+        """Sets the target_type"""
+        self._target_type = value
+
+    @property
+    def driving_table(self) -> str:
+        """Returns the driving_table"""
+        return self._driving_table
+
+    @driving_table.setter
+    def driving_table(self, value: str) -> None:
+        """Sets the driving_table"""
+        self._driving_table = value
+
+    @property
+    def source_to_target(self) -> str:
+        """Returns the source_to_target"""
+        return self._source_to_target
+
+    @source_to_target.setter
+    def source_to_target(self, value: str) -> None:
+        """Sets the source_to_target"""
+        self._source_to_target = value
+
+    @property
+    def write_disposition(self) -> str:
+        """Returns the write_disposition"""
+        return self._write_disposition
+
+    @write_disposition.setter
+    def write_disposition(self, value: str) -> None:
+        """Sets the write_disposition"""
+        self._write_disposition = value
+
+    @property
+    def sql(self) -> str:
+        """Returns the sql"""
+        return self._sql
+
+    @sql.setter
+    def sql(self, value: str) -> None:
+        """Sets the sql"""
+        self._sql = value
+
+    @property
+    def joins(self) -> list[Join]:
+        """Returns the joins"""
+        return self._joins
+
+    @joins.setter
+    def joins(self, value: list[Join]) -> None:
+        """Sets the joins"""
+        self._joins = value
+
+    @property
+    def where(self) -> list[Condition]:
+        """Returns the where"""
+        return self._where
+
+    @where.setter
+    def where(self, value: list[Condition]) -> None:
+        """Sets the where"""
+        self._where = value
+
+    @property
+    def delta(self) -> Delta:
+        """Returns the delta"""
+        return self._delta
+
+    @delta.setter
+    def delta(self, value: Delta) -> None:
+        """Sets the delta"""
+        self._delta = value
+
+    @property
+    def destination_dataset(self) -> str:
+        """Returns the destination_dataset"""
+        return self._destination_dataset
+
+    @destination_dataset.setter
+    def destination_dataset(self, value: str) -> None:
+        """Sets the destination_dataset"""
+        self._destination_dataset = value
+
+    @property
+    def history(self) -> History:
+        """Returns the history"""
+        return self._history
+
+    @history.setter
+    def history(self, value: History) -> None:
+        """Sets the history"""
+        self._history = value
+
+
+class SQLTask(Task):
+    def __init__(
+        self,
+        task_id: str,
+        operator: SQLTaskOperator,
+        parameters: SQLParameter,
+        dependencies: list[str] = [],
+    ) -> None:
+        self._task_id = task_id
+        self._operator = operator
+        self._parameters = parameters
+        self._dependencies = dependencies

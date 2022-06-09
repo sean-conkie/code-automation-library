@@ -412,13 +412,6 @@
           "sql/spine_offer_td_offer_priceable_unit_soip.sql",
           "truncate table uk_pub_customer_spine_offer_is.dim_offer_priceable_unit;"
         ]
-      },
-      "destination_dataset_table": {
-        "type": "string",
-        "title": "The destination dataset for the target table",
-        "examples": [
-          ""
-        ]
       }
     },
     "dependencies": {

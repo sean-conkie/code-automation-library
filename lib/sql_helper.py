@@ -3,8 +3,18 @@ import copy
 import re
 
 from datetime import datetime
+from enum import Enum
 from jinja2 import Environment, FileSystemLoader
-from lib.baseclasses import Condition, Field, Join, LogicOperator, Operator, JoinType
+from lib.baseclasses import (
+    Condition,
+    Field,
+    Join,
+    LogicOperator,
+    Operator,
+    JoinType,
+    Task,
+    WriteDisposition,
+)
 from lib.logger import ILogger, pop_stack
 
 __all__ = [
@@ -22,125 +32,7 @@ __all__ = [
 
 pattern = r"^((?P<table>[a-zA-Z0-9_\{\}]+\.[a-zA-Z0-9_\{\}]+)(?:\.))?(?P<column>[a-zA-Z0-9_%'(), ]+)$"
 
-# > This class is used to create a SQL query that updates a target table with data from a source table
-class UpdateTask(object):
 
-    def __init__(
-        self,
-        target_dataset: str,
-        target_table: str,
-        source_dataset: str,
-        source_table: str,
-        source_to_target: list[Field],
-        tables: dict,
-        where: list[Condition],
-    ) -> None:
-
-        self._target_dataset = target_dataset
-        self._target_table = target_table
-        self._source_dataset = source_dataset
-        self._source_table = source_table
-        self._source_to_target = source_to_target
-        self._tables = tables
-        self._where = where
-
-    @property
-    def target_dataset(self):
-        """
-        Returns the target_dataset
-        """
-        return self._target_dataset
-
-    @target_dataset.setter
-    def target_dataset(self, value):
-        """
-        Sets the target_dataset
-        """
-        self._target_dataset = value
-        
-    @property
-    def target_table(self):
-        """
-        Returns the target_table
-        """
-        return self._target_table
-
-    @target_table.setter
-    def target_table(self, value):
-        """
-        Sets the target_table
-        """
-        self._target_table = value
-        
-    @property
-    def source_dataset(self):
-        """
-        Returns the source_dataset
-        """
-        return self._source_dataset
-
-    @source_dataset.setter
-    def source_dataset(self, value):
-        """
-        Sets the source_dataset
-        """
-        self._source_dataset = value
-        
-    @property
-    def source_table(self):
-        """
-        Returns the source_table
-        """
-        return self._source_table
-
-    @source_table.setter
-    def source_table(self, value):
-        """
-        Sets the source_table
-        """
-        self._source_table = value
-        
-    @property
-    def source_to_target(self):
-        """
-        Returns the source_to_target
-        """
-        return self._source_to_target
-
-    @source_to_target.setter
-    def source_to_target(self, value):
-        """
-        Sets the source_to_target
-        """
-        self._source_to_target = value
-        
-    @property
-    def tables(self):
-        """
-        Returns the tables
-        """
-        return self._tables
-
-    @tables.setter
-    def tables(self, value):
-        """
-        Sets the tables
-        """
-        self._tables = value
-        
-    @property
-    def where(self):
-        """
-        Returns the where
-        """
-        return self._where
-
-    @where.setter
-    def where(self, value):
-        """
-        Sets the where
-        """
-        self._where = value
 
 def create_sql_file(
     logger: ILogger,
