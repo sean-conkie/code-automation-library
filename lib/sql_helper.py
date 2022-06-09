@@ -23,15 +23,7 @@ __all__ = [
 pattern = r"^((?P<table>[a-zA-Z0-9_\{\}]+\.[a-zA-Z0-9_\{\}]+)(?:\.))?(?P<column>[a-zA-Z0-9_%'(), ]+)$"
 
 # > This class is used to create a SQL query that updates a target table with data from a source table
-class UpdateTask:
-
-    target_dataset = None
-    target_table = None
-    source_dataset = None
-    source_table = None
-    source_to_target = None
-    where = None
-    tables = None
+class UpdateTask(object):
 
     def __init__(
         self,
@@ -44,14 +36,111 @@ class UpdateTask:
         where: list[Condition],
     ) -> None:
 
-        self.target_dataset = target_dataset
-        self.target_table = target_table
-        self.source_dataset = source_dataset
-        self.source_table = source_table
-        self.source_to_target = source_to_target
-        self.tables = tables
-        self.where = where
+        self._target_dataset = target_dataset
+        self._target_table = target_table
+        self._source_dataset = source_dataset
+        self._source_table = source_table
+        self._source_to_target = source_to_target
+        self._tables = tables
+        self._where = where
 
+    @property
+    def target_dataset(self):
+        """
+        Returns the target_dataset
+        """
+        return self._target_dataset
+
+    @target_dataset.setter
+    def target_dataset(self, value):
+        """
+        Sets the target_dataset
+        """
+        self._target_dataset = value
+        
+    @property
+    def target_table(self):
+        """
+        Returns the target_table
+        """
+        return self._target_table
+
+    @target_table.setter
+    def target_table(self, value):
+        """
+        Sets the target_table
+        """
+        self._target_table = value
+        
+    @property
+    def source_dataset(self):
+        """
+        Returns the source_dataset
+        """
+        return self._source_dataset
+
+    @source_dataset.setter
+    def source_dataset(self, value):
+        """
+        Sets the source_dataset
+        """
+        self._source_dataset = value
+        
+    @property
+    def source_table(self):
+        """
+        Returns the source_table
+        """
+        return self._source_table
+
+    @source_table.setter
+    def source_table(self, value):
+        """
+        Sets the source_table
+        """
+        self._source_table = value
+        
+    @property
+    def source_to_target(self):
+        """
+        Returns the source_to_target
+        """
+        return self._source_to_target
+
+    @source_to_target.setter
+    def source_to_target(self, value):
+        """
+        Sets the source_to_target
+        """
+        self._source_to_target = value
+        
+    @property
+    def tables(self):
+        """
+        Returns the tables
+        """
+        return self._tables
+
+    @tables.setter
+    def tables(self, value):
+        """
+        Sets the tables
+        """
+        self._tables = value
+        
+    @property
+    def where(self):
+        """
+        Returns the where
+        """
+        return self._where
+
+    @where.setter
+    def where(self, value):
+        """
+        Sets the where
+        """
+        self._where = value
 
 def create_sql_file(
     logger: ILogger,
@@ -1307,7 +1396,7 @@ def create_sql_where(
     logger.info(f"{pop_stack()} - STARTED".center(100, "-"))
     logger.debug(
         f"""{pop_stack()} - creating where conditions:)
-                               conditions  - {conditions}
+                               conditions  - {[f"{str(c)}" for c in conditions]}
                                tables      - {tables}"""
     )
 
