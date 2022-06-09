@@ -1,6 +1,14 @@
 from enum import Enum
 
-__all__ = ["Condition", "Field", "Task", "LogicOperator" "Join"]
+__all__ = [
+    "Condition",
+    "Field",
+    "Task",
+    "LogicOperator",
+    "Join",
+    "Operator",
+    "JoinType",
+]
 
 
 class LogicOperator(Enum):
@@ -21,6 +29,13 @@ class Operator(Enum):
     LT = "<"
     LE = "<="
     NONE = None
+
+
+class JoinType(Enum):
+    LEFT = "left"
+    INNER = "inner"
+    FULL = "full"
+    CROSS = "cross"
 
 
 class WriteDisposition(Enum):
@@ -53,12 +68,20 @@ class Join:
     left = None
     right = None
     on = []
+    join_type = JoinType.LEFT
 
-    def __init__(self, right: str, on: list[Condition], left: str = None) -> None:
+    def __init__(
+        self,
+        right: str,
+        on: list[Condition],
+        left: str = None,
+        join_type: JoinType = JoinType.LEFT,
+    ) -> None:
 
         self.left = left
         self.right = right
         self.on = on
+        self.join_type = join_type
 
 
 class Field:

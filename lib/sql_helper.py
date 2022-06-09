@@ -4,7 +4,7 @@ import re
 
 from datetime import datetime
 from jinja2 import Environment, FileSystemLoader
-from lib.baseclasses import Condition, Field, Join, LogicOperator, Operator
+from lib.baseclasses import Condition, Field, Join, LogicOperator, Operator, JoinType
 from lib.logger import ILogger, pop_stack
 
 __all__ = [
@@ -20,6 +20,7 @@ __all__ = [
     "create_sql_where",
 ]
 
+pattern = r"^((?P<table>[a-zA-Z0-9_\{\}]+\.[a-zA-Z0-9_\{\}]+)(?:\.))?(?P<column>[a-zA-Z0-9_%'(), ]+)$"
 
 # > This class is used to create a SQL query that updates a target table with data from a source table
 class UpdateTask:
@@ -1202,41 +1203,62 @@ def create_sql_conditions(logger: ILogger, task: dict) -> dict:
     ]
     logger.info(f"{pop_stack()} - identifying join conditions")
     if "joins" in task["parameters"].keys():
-        for join in task["parameters"]["joins"]:
-            left_table = ""
-            right_table = ""
+        for j in task["parameters"]["joins"]:
 
-            if "left" in join.keys():
-                if not join["left"] in tables.keys():
-                    tables[join["right"]] = chr(i + 97)
+            join = Join(
+                j["right"],
+                [
+                    Condition(
+                        c["fields"],
+                        LogicOperator(c["condition"]),
+                        Operator(c["operator"]),
+                    )
+                    if "condition" in c.keys()
+                    else Condition(
+                        c["fields"],
+                        LogicOperator.AND,
+                        Operator(c["operator"]),
+                    )
+                    for c in j["on"]
+                ],
+                j["left"] if "left" in j.keys() else "",
+                JoinType.LEFT if "type" not in j.keys() else JoinType(j["type"]),
+            )
+
+            if join.left:
+                if not join.left in tables.keys():
+                    tables[join.left] = chr(i + 97)
                     i = +1
-            if not join["right"] in tables.keys():
-                tables[join["right"]] = chr(i + 97)
+
+            if not join.right in tables.keys():
+                tables[join.right] = chr(i + 97)
                 i = +1
 
-            join_type = "left" if not "type" in join.keys() else join["type"]
-            left_table = (
-                task["parameters"]["driving_table"]
-                if not "left" in join.keys()
-                else join["left"]
-            )
-            right_table = join["right"]
             frm.append(
-                f"{join_type.rjust(6)} join {join['right']} {tables[join['right']]}"
+                f"{join.join_type.value.rjust(6)} join {join.right} {tables[join.right]}"
             )
 
-            pad = max([len(c["fields"][0]) for c in join["on"]])
-            for j, condition in enumerate(join["on"]):
-                on_prefix = "(    " if len(join["on"]) > 1 and j == 0 else ""
-                on_suffix = (
-                    ")" if len(join["on"]) > 1 and len(join["on"]) == j + 1 else ""
-                )
-                prefix = "    on " if j == 0 else "        and "
+            for c in join.on:
+                for i, f in enumerate(c.fields):
+                    m = re.search(pattern, f, re.IGNORECASE)
+                    if m.group("table"):
+                        c.fields[i] = f"{tables[m.group('table')]}.{m.group('column')}"
 
-                left = f"{condition['fields'][0].replace(left_table,f'{tables[left_table]}').replace(right_table,f'{tables[right_table]}')}"
-                right = f"{condition['fields'][1].replace(left_table,f'{tables[left_table]}').replace(right_table,f'{tables[right_table]}')}"
+            pad = max([len(c.fields[0]) for c in join.on])
+            for j, condition in enumerate(join.on):
+                on_prefix = "(    " if len(join.on) > 1 and j == 0 else ""
+                on_suffix = ")" if len(join.on) > 1 and len(join.on) == j + 1 else ""
+                if j == 0:
+                    prefix = "    on "
+                elif condition.condition.value:
+                    prefix = f"{condition.condition.value.rjust(11)} "
+                else:
+                    prefix = "        and "
+
+                left = f"{condition.fields[0]}"
+                right = f"{condition.fields[1]}"
                 frm.append(
-                    f"{prefix}{on_prefix}{left.ljust(pad)} {condition['operator']} {right}{on_suffix}"
+                    f"{prefix}{on_prefix}{left.ljust(pad)} {condition.operator.value} {right}{on_suffix}"
                 )
 
     where = (
@@ -1251,7 +1273,7 @@ def create_sql_conditions(logger: ILogger, task: dict) -> dict:
                 if "condition" in c.keys()
                 else Condition(
                     c["fields"],
-                    condition=LogicOperator["NONE"],
+                    condition=LogicOperator.AND,
                     operator=Operator(c["operator"]),
                 )
                 for c in task["parameters"]["where"]
@@ -1290,7 +1312,6 @@ def create_sql_where(
     )
 
     where = []
-    pattern = r"^((?P<table>[a-zA-Z0-9_\{\}]+\.[a-zA-Z0-9_\{\}]+)(?:\.))?(?P<column>[a-zA-Z0-9_%'(), ]+)$"
 
     # for each condition, replace table names with alias
     for c in conditions:

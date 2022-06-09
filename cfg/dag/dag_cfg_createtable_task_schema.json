@@ -93,9 +93,16 @@
                   "properties": {
                     "operator": {
                       "type": "string",
-                      "title": "The operator",
+                      "title": "The operator, i.e =, !=",
                       "examples": [
                         "="
+                      ]
+                    },
+                    "condition": {
+                      "type": "string",
+                      "title": "The logic operator, i.e. AND, OR",
+                      "examples": [
+                        "AND"
                       ]
                     },
                     "fields": {
@@ -209,9 +216,16 @@
               "properties": {
                 "operator": {
                   "type": "string",
-                  "title": "The operator",
+                  "title": "The operator, i.e =, !=",
                   "examples": [
                     "="
+                  ]
+                },
+                "condition": {
+                  "type": "string",
+                  "title": "The logic operator, i.e. AND, OR",
+                  "examples": [
+                    "AND"
                   ]
                 },
                 "fields": {
