@@ -1,3 +1,5 @@
+import re
+
 from enum import Enum
 from unittest.util import strclass
 from warnings import warn
@@ -11,8 +13,12 @@ __all__ = [
     "Operator",
     "JoinType",
     "WriteDisposition",
-    "SQLTaskOperator",
+    "TaskOperator",
     "SQLTask",
+    "SQLDataCheckTask",
+    "SQLParameter",
+    "SQLDataCheckParameter",
+    "todict",
 ]
 
 
@@ -44,12 +50,12 @@ class JoinType(Enum):
 
 
 class WriteDisposition(Enum):
-    WRITE_APPEND = "WRITE_APPEND"
-    WRITE_TRANSIENT = "WRITE_TRANSIENT"
-    WRITE_TRUNCATE = "WRITE_TRUNCATE"
+    WRITEAPPEND = "WRITE_APPEND"
+    WRITETRANSIENT = "WRITE_TRANSIENT"
+    WRITETRUNCATE = "WRITE_TRUNCATE"
 
 
-class SQLTaskOperator(Enum):
+class TaskOperator(Enum):
     CREATETABLE = "CreateTable"
     TRUNCATETABLE = "TruncateTable"
     DATACHECK = "DataCheck"
@@ -57,6 +63,16 @@ class SQLTaskOperator(Enum):
     GCSTOBQ = "GoogleCloudStorageToBigQueryOperator"
     BQCHEK = "BigQueryCheckOperator"
     BQOPERATOR = "BigQueryOperator"
+    EXTSENSOR = "ExternalTaskSensor"
+
+
+class TableType(Enum):
+    TYPE1 = 1
+    HISTORY = 2
+    TYPE3 = 3
+    TYPE4 = 4
+    TYPE5 = 5
+    TYPE6 = 6
 
 
 class Condition(object):
@@ -565,7 +581,7 @@ class SQLParameter(object):
     def __init__(
         self,
         destination_table: str,
-        target_type: int,
+        target_type: TableType,
         driving_table: str,
         source_to_target: list[Field],
         write_disposition: WriteDisposition,
@@ -611,12 +627,12 @@ class SQLParameter(object):
         self._destination_table = value
 
     @property
-    def target_type(self) -> str:
+    def target_type(self) -> TableType:
         """Returns the target_type"""
         return self._target_type
 
     @target_type.setter
-    def target_type(self, value: str) -> None:
+    def target_type(self, value: TableType) -> None:
         """Sets the target_type"""
         self._target_type = value
 
@@ -715,7 +731,7 @@ class SQLTask(Task):
     def __init__(
         self,
         task_id: str,
-        operator: SQLTaskOperator,
+        operator: TaskOperator,
         parameters: SQLParameter,
         dependencies: list[str] = [],
     ) -> None:
@@ -723,3 +739,138 @@ class SQLTask(Task):
         self._operator = operator
         self._parameters = parameters
         self._dependencies = dependencies
+
+    @property
+    def operator(self) -> TaskOperator:
+        """
+        Returns the operator
+        """
+        return self._operator
+
+    @operator.setter
+    def operator(self, value: TaskOperator) -> None:
+        """
+        Sets the operator
+        """
+        self._operator = value
+
+    @property
+    def parameters(self) -> SQLParameter:
+        """
+        Returns the parameters
+        """
+        return self._parameters
+
+    @parameters.setter
+    def parameters(self, value: SQLParameter) -> None:
+        """
+        Sets the parameters
+        """
+        self._parameters = value
+
+
+class SQLDataCheckParameter(object):
+    def __init__(self, sql: str, params: dict = None) -> None:
+        self._sql = sql
+        self._params = params
+
+    @property
+    def sql(self) -> str:
+        """Returns the sql"""
+        return self._sql
+
+    @sql.setter
+    def sql(self, value: str) -> None:
+        """Sets the sql"""
+        self._sql = value
+
+    @property
+    def params(self) -> dict:
+        """Returns the params"""
+        return self._params
+
+    @params.setter
+    def params(self, value: dict) -> None:
+        """Sets the params"""
+        self._params = value
+
+
+class SQLDataCheckTask(Task):
+    def __init__(
+        self,
+        task_id: str,
+        operator: TaskOperator,
+        parameters: SQLDataCheckParameter,
+        dependencies: list[str] = [],
+    ) -> None:
+        self._task_id = task_id
+        self._operator = operator
+        self._parameters = parameters
+        self._dependencies = dependencies
+
+    @property
+    def operator(self) -> TaskOperator:
+        """
+        Returns the operator
+        """
+        return self._operator
+
+    @operator.setter
+    def operator(self, value: TaskOperator) -> None:
+        """
+        Sets the operator
+        """
+        self._operator = value
+
+    @property
+    def parameters(self) -> SQLDataCheckParameter:
+        """
+        Returns the parameters
+        """
+        return self._parameters
+
+    @parameters.setter
+    def parameters(self, value: SQLDataCheckParameter) -> None:
+        """
+        Sets the parameters
+        """
+        self._parameters = value
+
+
+def todict(obj, classkey=None):
+    """
+    It converts an object to a dictionary, and if the object is a class, it converts the class to a
+    dictionary, and if the class has a class, it converts that class to a dictionary, and so on
+
+    Args:
+      obj: The object to convert to a dictionary.
+      classkey: If this is provided, the resulting dictionary will include a key for the class name of
+    the object.
+
+    Returns:
+      A dictionary of the object's attributes.
+    """
+    if isinstance(obj, dict):
+        data = {}
+        for (k, v) in obj.items():
+            data[k] = todict(v, classkey)
+        return data
+    elif hasattr(obj, "_ast"):
+        return todict(obj._ast())
+    elif hasattr(obj, "__iter__") and not isinstance(obj, str):
+        return [todict(v, classkey) for v in obj]
+    elif issubclass(type(obj), Enum):
+        return obj.value
+    elif hasattr(obj, "__dict__"):
+        data = dict(
+            [
+                (re.sub(r"^_", "", key, re.IGNORECASE), todict(value, classkey))
+                for key, value in obj.__dict__.items()
+                if not callable(value)
+            ]
+        )
+        if classkey is not None and hasattr(obj, "__class__"):
+            data[classkey] = obj.__class__.__name__
+        return data
+    else:
+        return obj

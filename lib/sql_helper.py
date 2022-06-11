@@ -13,52 +13,41 @@ from lib.baseclasses import (
     Operator,
     JoinType,
     Task,
+    TaskOperator,
     WriteDisposition,
+    UpdateTask,
+    SQLTask,
+    SQLParameter,
+    TableType,
 )
 from lib.logger import ILogger, pop_stack
 
 __all__ = [
     "create_sql_file",
     "create_sql",
-    "create_delta_conditions" "create_type_1_sql",
-    "create_type_2_sql",
-    "create_type_2_analytic_list",
-    "create_type_2_delta_conditions" "create_table_query",
-    "create_update_query",
-    "create_sql_select",
-    "create_sql_conditions",
-    "create_sql_where",
 ]
 
 pattern = r"^((?P<table>[a-zA-Z0-9_\{\}]+\.[a-zA-Z0-9_\{\}]+)(?:\.))?(?P<column>[a-zA-Z0-9_%'(), ]+)$"
 
 
-
 def create_sql_file(
     logger: ILogger,
-    task: dict,
+    task: Task,
     file_path: str = "./dags/sql/",
     dataset_staging: str = None,
 ) -> str:
     """
-    > This function creates a SQL file for a given task
-
-    The function takes in the following arguments:
-
-    - logger: This is the logger object that is passed to the function.
-    - task: The task dictionary
-    - file_path: The path to the directory where the SQL file will be created.
-    - dataset_staging: The name of the staging dataset
+    > This function takes a task and creates a SQL file for it
 
     Args:
-      logger (ILogger): ILogger - this is the logger object that is passed to the function.
-      task (dict): the task dictionary
+      logger (ILogger): ILogger - this is the logger object that we created in the previous step.
+      task (Task): This is the task object that we created in the previous section.
       file_path (str): The path to the directory where the SQL file will be created. Defaults to
-    ./dags/sql
-      dataset_staging (str): The name of the staging dataset.
+    ./dags/sql/
+      dataset_staging (str): This is the name of the staging table that will be created.
 
     Returns:
-      The path to the SQL file that was created.
+      The file path of the sql file that was created.
     """
 
     logger.info(f"{pop_stack()} - STARTED".center(100, "-"))
@@ -69,11 +58,11 @@ def create_sql_file(
     template = env.get_template("template_sql.txt")
     output = template.render(
         sql=sql,
-        task_id=task["task_id"],
+        task_id=task.task_id,
         created_date=datetime.now().strftime("%d %b %Y"),
     )
 
-    sql_file = f"{file_path}{task['task_id']}.sql"
+    sql_file = f"{file_path}{task.task_id}.sql"
     with open(sql_file, "w") as outfile:
         outfile.write(output)
 
@@ -81,51 +70,47 @@ def create_sql_file(
     return sql_file
 
 
-def create_sql(logger: ILogger, task: dict, dataset_staging: str = None) -> str:
-    """Method for generating a SQL query to be executed by the task.
+def create_sql(logger: ILogger, task: Task, dataset_staging: str = None) -> str:
 
-    This method uses the details supplied in the config to create a string containing
-    a SQL query.
-
-    Task contains a parameter table_type allowing the method to generate type 1 or type 2
-    logic.
-
-    Calls:
-        create_sql_conditions
-        create_sql_select
-        create_sql_where
-
-    Args:
-      task (dict): A dictionary of representing a task to be added to the DAG.  Used to create a task
-    parameter string
-      dataset_staging (str): The name of the staging dataset.
-
-    Returns:
-      A string containing the SQL query to be executed by the task.
-    """
     logger.info(f"{pop_stack()} - STARTED".center(100, "-"))
 
-    target_dataset = (
-        "{{dataset_publish}}"
-        if "destination_dataset" not in task["parameters"].keys()
-        else task["parameters"]["destination_dataset"]
+    write_disposition = WriteDisposition(
+        task.parameters.get("write_disposition"), "write_truncate"
     )
-    write_disposition = (
-        "WRITE_TRUNCATE"
-        if not "write_disposition" in task["parameters"].keys()
-        else task["parameters"]["write_disposition"]
+    target_dataset = task.parameters.get("destination_dataset", "{{dataset_publish}}")
+
+    params = SQLParameter(
+        task.parameters["destination_table"],
+        TableType(task.parameters["target_type"]),
+        task.parameters["driving_table"],
+        task.parameters["source_to_target"],
+        write_disposition,
+        task.parameters["sql"],
+        task.parameters.get("joins"),
+        task.parameters.get("where"),
+        task.parameters.get("delta"),
+        target_dataset,
+        task.parameters.get("history"),
+        task.parameters.get("block_data_check"),
+    )
+
+    sqltask = SQLTask(
+        copy.copy(task.task_id),
+        TaskOperator(task.operator),
+        params,
+        copy.deepcopy(task.dependencies),
     )
 
     logger.info(
-        f'{pop_stack()} - creating sql for table type {task["parameters"]["target_type"]}'
+        f"{pop_stack()} - creating sql for table type {sqltask.parameters.target_type.name}"
     )
-    if task["parameters"]["target_type"] == 1:
+    if sqltask.parameters.target_type == 1:
         sql = create_type_1_sql(
-            logger, task, target_dataset, write_disposition, dataset_staging
+            logger, sqltask, target_dataset, write_disposition, dataset_staging
         )
-    elif task["parameters"]["target_type"] == 2:
+    elif sqltask.parameters.target_type == 2:
         sql = create_type_2_sql(
-            logger, task, target_dataset, dataset_staging, write_disposition
+            logger, sqltask, target_dataset, dataset_staging, write_disposition
         )
 
     outp = "\n".join(sql)
@@ -149,15 +134,15 @@ def create_delta_conditions(logger: ILogger, task: dict) -> list:
 
     outp = None
 
-    if "delta" in task["parameters"].keys():
-        delta = task["parameters"]["delta"]
+    if "delta" in task.parameters.keys():
+        delta = task.parameters["delta"]
         logger.debug(f"delta object: {delta}")
         outp = []
         if "transformation" in delta["field"].keys():
             field = delta["field"]["transformation"]
         else:
             source_name = (
-                task["parameters"]["driving_table"]
+                task.parameters["driving_table"]
                 if not "source_name" in delta["field"].keys()
                 else delta["field"]["source_name"]
             )
@@ -218,14 +203,14 @@ def create_type_2_delta_condition(logger: ILogger, task: dict) -> dict:
 
     outp = None
 
-    if "delta" in task["parameters"].keys():
-        delta = task["parameters"]["delta"]
+    if "delta" in task.parameters.keys():
+        delta = task.parameters["delta"]
         logger.debug(f"delta object: {delta}")
         if "transformation" in delta["field"].keys():
             field = delta["field"]["transformation"]
         else:
             source_name = (
-                task["parameters"]["driving_table"]
+                task.parameters["driving_table"]
                 if not "source_name" in delta["field"].keys()
                 else delta["field"]["source_name"]
             )
@@ -269,19 +254,19 @@ def create_type_1_sql(
     subst = "td"
     if delta:
         for d in delta:
-            wtask["parameters"]["where"].append(d)
+            wtask.parameters["where"].append(d)
 
         w_write_disposition = "WRITE_TRANSIENT"
         w_target_dataset = dataset_staging
-        wtask["parameters"]["destination_table"] = re.sub(
+        wtask.parameters["destination_table"] = re.sub(
             regex,
             subst,
-            f'{wtask["parameters"]["destination_table"]}_p1',
+            f'{wtask.parameters["destination_table"]}_p1',
             0,
             re.MULTILINE,
         )
     else:
-        task["parameters"]["source_to_target"].append(
+        task.parameters["source_to_target"].append(
             {
                 "transformation": f"current_timestamp()",
                 "name": "dw_last_modified_dt",
@@ -293,7 +278,7 @@ def create_type_1_sql(
             logger,
             wtask,
             w_target_dataset,
-            wtask["parameters"]["destination_table"],
+            wtask.parameters["destination_table"],
             w_write_disposition,
         )
     ]
@@ -306,15 +291,15 @@ def create_type_1_sql(
 
         keys = [
             field["name"]
-            for field in dtask["parameters"]["source_to_target"]
+            for field in dtask.parameters["source_to_target"]
             if "pk" in field.keys()
         ]
 
-        dtask["parameters"][
+        dtask.parameters[
             "driving_table"
         ] = f"{w_target_dataset}.{wtask['parameters']['destination_table']}"
 
-        dtask["parameters"]["joins"] = [
+        dtask.parameters["joins"] = [
             {
                 "right": f"{target_dataset}.{dtask['parameters']['destination_table']}",
                 "on": [
@@ -330,43 +315,43 @@ def create_type_1_sql(
             }
         ]
 
-        dtask["parameters"]["source_to_target"] = [
+        dtask.parameters["source_to_target"] = [
             {
                 "name": field["name"],
                 "source_column": field["name"],
                 "source_name": f"{dtask['parameters']['driving_table']}",
             }
-            for field in dtask["parameters"]["source_to_target"]
+            for field in dtask.parameters["source_to_target"]
         ]
 
-        dtask["parameters"]["source_to_target"].append(
+        dtask.parameters["source_to_target"].append(
             {
                 "transformation": f"if({target_dataset}.{dtask['parameters']['destination_table']}.{keys[0]} is null, 1, 2)",
                 "name": "row_action",
             }
         )
 
-        dest = f'{task["parameters"]["destination_table"]}_p2'
-        dtask["parameters"][
+        dest = f'{task.parameters["destination_table"]}_p2'
+        dtask.parameters[
             "destination_table"
         ] = f"{re.sub(regex,subst,dest,0,re.MULTILINE,)}"
 
-        dtask["parameters"]["where"] = []
+        dtask.parameters["where"] = []
 
         sql.append(
             create_table_query(
                 logger,
                 dtask,
                 dataset_staging,
-                dtask["parameters"]["destination_table"],
+                dtask.parameters["destination_table"],
                 "WRITE_TRANSIENT",
             )
         )
 
         # for all new inserts (row_action = 1) create an insert into
         iitask = copy.deepcopy(task)
-        iitask["parameters"]["joins"] = []
-        iitask["parameters"]["where"] = [
+        iitask.parameters["joins"] = []
+        iitask.parameters["where"] = [
             {
                 "operator": "=",
                 "fields": [
@@ -375,31 +360,31 @@ def create_type_1_sql(
                 ],
             }
         ]
-        iitask["parameters"]["driving_table"] = copy.deepcopy(
+        iitask.parameters["driving_table"] = copy.deepcopy(
             f"{dataset_staging}.{dtask['parameters']['destination_table']}"
         )
-        iitask["parameters"]["source_to_target"] = [
+        iitask.parameters["source_to_target"] = [
             {
                 "name": field["name"],
                 "source_column": field["name"],
                 "source_name": f"{iitask['parameters']['driving_table']}",
             }
-            for field in task["parameters"]["source_to_target"]
+            for field in task.parameters["source_to_target"]
         ]
-        iitask["parameters"]["source_to_target"].append(
+        iitask.parameters["source_to_target"].append(
             {
                 "transformation": f"current_timestamp()",
                 "name": "dw_created_dt",
             }
         )
-        iitask["parameters"]["source_to_target"].append(
+        iitask.parameters["source_to_target"].append(
             {
                 "transformation": f"current_timestamp()",
                 "name": "dw_last_modified_dt",
             }
         )
 
-        for f in iitask["parameters"]["source_to_target"]:
+        for f in iitask.parameters["source_to_target"]:
             if f["name"] in keys:
                 f["pk"] = None
 
@@ -408,7 +393,7 @@ def create_type_1_sql(
                 logger,
                 iitask,
                 target_dataset,
-                iitask["parameters"]["destination_table"],
+                iitask.parameters["destination_table"],
                 "WRITE_APPEND",
             )
         )
@@ -418,9 +403,9 @@ def create_type_1_sql(
             Field(
                 field["name"],
                 source_column=field["name"],
-                source_name=iitask["parameters"]["driving_table"],
+                source_name=iitask.parameters["driving_table"],
             )
-            for field in task["parameters"]["source_to_target"]
+            for field in task.parameters["source_to_target"]
             if "pk" not in field.keys()
         ]
         source_to_target.append(
@@ -435,7 +420,7 @@ def create_type_1_sql(
                 ],
                 operator=Operator["EQ"],
             )
-            for field in iitask["parameters"]["source_to_target"]
+            for field in iitask.parameters["source_to_target"]
             if "pk" in field.keys()
         ]
 
@@ -451,9 +436,9 @@ def create_type_1_sql(
 
         utask = UpdateTask(
             target_dataset,
-            task["parameters"]["destination_table"],
+            task.parameters["destination_table"],
             dataset_staging,
-            dtask["parameters"]["destination_table"],
+            dtask.parameters["destination_table"],
             source_to_target,
             {
                 f"{iitask['parameters']['driving_table']}": "src",
@@ -501,7 +486,7 @@ def create_type_2_sql(
     """
     logger.info(f"{pop_stack()} - STARTED".center(100, "-"))
     sql = []
-    td_table = re.sub(r"^[a-zA-Z]+_", "td_", task["parameters"]["destination_table"])
+    td_table = re.sub(r"^[a-zA-Z]+_", "td_", task.parameters["destination_table"])
     logger.info(
         f'{pop_stack()} - create sql for transient table, pull source data and previous columns - "{dataset_staging}.{td_table}_p1"'
     )
@@ -514,7 +499,7 @@ def create_type_2_sql(
     delta = create_delta_conditions(logger, task)
     if delta:
         for d in delta:
-            wtask["parameters"]["where"].append(d)
+            wtask.parameters["where"].append(d)
 
     sql.append(
         create_table_query(
@@ -530,10 +515,10 @@ def create_type_2_sql(
     # if delta, take all primary keys identified and add full history to p1
     if delta:
         join_on = []
-        for field in task["parameters"]["source_to_target"]:
+        for field in task.parameters["source_to_target"]:
             if "hk" in field.keys():
                 source_name = (
-                    task["parameters"]["driving_table"]
+                    task.parameters["driving_table"]
                     if not "source_name" in field.keys()
                     else field["source_name"]
                 )
@@ -567,24 +552,24 @@ def create_type_2_sql(
         delta_task = {
             "parameters": {
                 "write_disposition": "WRITE_APPEND",
-                "driving_table": task["parameters"]["driving_table"],
-                "source_to_target": task["parameters"]["source_to_target"],
+                "driving_table": task.parameters["driving_table"],
+                "source_to_target": task.parameters["source_to_target"],
             }
         }
 
-        if "joins" in task["parameters"].keys():
-            delta_task["parameters"]["joins"] = [j for j in task["parameters"]["joins"]]
-            delta_task["parameters"]["joins"].append(delta_join)
+        if "joins" in task.parameters.keys():
+            delta_task.parameters["joins"] = [j for j in task.parameters["joins"]]
+            delta_task.parameters["joins"].append(delta_join)
         else:
-            delta_task["parameters"]["joins"] = [delta_join]
+            delta_task.parameters["joins"] = [delta_join]
 
         delta_where = create_type_2_delta_condition(logger, task)
 
-        if "joins" in task["parameters"].keys():
-            delta_task["parameters"]["where"] = [w for w in task["parameters"]["where"]]
-            delta_task["parameters"]["where"].append(delta_where)
+        if "joins" in task.parameters.keys():
+            delta_task.parameters["where"] = [w for w in task.parameters["where"]]
+            delta_task.parameters["where"].append(delta_where)
         else:
-            delta_task["parameters"]["where"] = [delta_where]
+            delta_task.parameters["where"] = [delta_where]
 
         sql.append(
             create_table_query(
@@ -621,7 +606,7 @@ def create_type_2_sql(
                     "operator": "!=",
                     "condition": "or",
                 }
-                for c in task["parameters"]["history"]["driving_column"]
+                for c in task.parameters["history"]["driving_column"]
             ],
         }
     }
@@ -649,7 +634,7 @@ def create_type_2_sql(
                 {"name": c["name"], "source_column": c["name"], "pk": c["pk"]}
                 if "pk" in c.keys()
                 else {"name": c["name"], "source_column": c["name"]}
-                for c in task["parameters"]["source_to_target"]
+                for c in task.parameters["source_to_target"]
             ],
         }
     }
@@ -663,7 +648,7 @@ def create_type_2_sql(
             },
             "partition": [
                 {"name": f"{p['name']}", "source_column": f"{p['name']}"}
-                for p in task["parameters"]["history"]["partition"]
+                for p in task.parameters["history"]["partition"]
             ],
             "order": [
                 {"name": "effective_from_dt", "source_column": "effective_from_dt"},
@@ -682,15 +667,15 @@ def create_type_2_sql(
     ]
 
     if delta:
-        td_task["parameters"]["write_disposition"] = "WRITE_TRANSIENT"
+        td_task.parameters["write_disposition"] = "WRITE_TRANSIENT"
 
         keys = [
             field["name"]
-            for field in td_task["parameters"]["source_to_target"]
+            for field in td_task.parameters["source_to_target"]
             if "pk" in field.keys()
         ]
 
-        td_task["parameters"]["joins"] = [
+        td_task.parameters["joins"] = [
             {
                 "right": f"{target_dataset}.{task['parameters']['destination_table']}",
                 "on": [
@@ -706,14 +691,14 @@ def create_type_2_sql(
             }
         ]
 
-        td_task["parameters"]["source_to_target"].append(
+        td_task.parameters["source_to_target"].append(
             {
                 "transformation": f"if({target_dataset}.{task['parameters']['destination_table']}.{keys[0]} is null, 1, 2)",
                 "name": "row_action",
             }
         )
 
-        td_task["parameters"]["destination_table"] = f"{dataset_staging}.{td_table}_p3"
+        td_task.parameters["destination_table"] = f"{dataset_staging}.{td_table}_p3"
 
         sql.append(
             create_table_query(
@@ -734,7 +719,7 @@ def create_type_2_sql(
                     {"name": c["name"], "source_column": c["name"], "pk": c["pk"]}
                     if "pk" in c.keys()
                     else {"name": c["name"], "source_column": c["name"]}
-                    for c in task["parameters"]["source_to_target"]
+                    for c in task.parameters["source_to_target"]
                 ],
                 "where": [
                     {
@@ -778,7 +763,7 @@ def create_type_2_sql(
                 ],
                 operator=Operator["EQ"],
             )
-            for field in ii_task["parameters"]["source_to_target"]
+            for field in ii_task.parameters["source_to_target"]
             if "pk" in field.keys()
         ]
 
@@ -794,7 +779,7 @@ def create_type_2_sql(
 
         utask = UpdateTask(
             target_dataset,
-            task["parameters"]["destination_table"],
+            task.parameters["destination_table"],
             dataset_staging,
             f"{td_table}_p3",
             source_to_target,
@@ -842,9 +827,7 @@ def create_type_2_analytic_list(logger: ILogger, task: dict) -> list:
     """
     logger.info(f"{pop_stack()} - STARTED".center(100, "-"))
     outp = []
-    history = (
-        task["parameters"]["history"] if "history" in task["parameters"].keys() else []
-    )
+    history = task.parameters["history"] if "history" in task.parameters.keys() else []
     for c in history["driving_column"]:
         analytic = {
             "type": "lag",
@@ -883,14 +866,14 @@ def create_type_2_delta_condition(logger: ILogger, task: dict) -> dict:
 
     outp = None
 
-    if "delta" in task["parameters"].keys():
-        delta = task["parameters"]["delta"]
+    if "delta" in task.parameters.keys():
+        delta = task.parameters["delta"]
         logger.debug(f"delta object: {delta}")
         if "transformation" in delta["field"].keys():
             field = delta["field"]["transformation"]
         else:
             source_name = (
-                task["parameters"]["driving_table"]
+                task.parameters["driving_table"]
                 if not "source_name" in delta["field"].keys()
                 else delta["field"]["source_name"]
             )
@@ -951,7 +934,7 @@ def create_table_query(
     # to the config.
     insert_columns = [
         f"{'       ' if i > 0 else ''}{c['name'] if 'name' in c.keys() else ''}"
-        for i, c in enumerate(wtask["parameters"]["source_to_target"])
+        for i, c in enumerate(wtask.parameters["source_to_target"])
     ]
     table_operation_suffix = f"({join_char.join(insert_columns)})"
 
@@ -983,7 +966,7 @@ insert into"""
             source_name = (
                 p["source_name"]
                 if "source_name" in p.keys()
-                else task["parameters"]["driving_table"]
+                else task.parameters["driving_table"]
             )
             source_column = p["source_column"] if "source_column" in p.keys() else ""
             partition_list.append(
@@ -998,7 +981,7 @@ insert into"""
             source_name = (
                 p["source_name"]
                 if "source_name" in p.keys()
-                else task["parameters"]["driving_table"]
+                else task.parameters["driving_table"]
             )
             source_column = p["source_column"] if "source_column" in p.keys() else ""
             order_list.append(
@@ -1011,7 +994,7 @@ insert into"""
         source_name = (
             analytic["column"]["source_name"]
             if "source_name" in analytic["column"].keys()
-            else task["parameters"]["driving_table"]
+            else task.parameters["driving_table"]
         )
         offset = "" if not "offset" in analytic.keys() else f", {analytic['offset']}"
         default = "" if not "default" in analytic.keys() else f", {analytic['default']}"
@@ -1024,19 +1007,19 @@ insert into"""
 
         column_list = [
             c["name"] if "name" in c.keys() else ""
-            for c in wtask["parameters"]["source_to_target"]
+            for c in wtask.parameters["source_to_target"]
         ]
         if analytic_transformation["name"] in column_list:
-            for i, c in enumerate(wtask["parameters"]["source_to_target"]):
+            for i, c in enumerate(wtask.parameters["source_to_target"]):
                 if (
                     analytic_transformation["name"] == c["name"]
                     if "name" in c.keys()
                     else ""
                 ):
-                    wtask["parameters"]["source_to_target"][i] = analytic_transformation
+                    wtask.parameters["source_to_target"][i] = analytic_transformation
                     break
         else:
-            wtask["parameters"]["source_to_target"].append(analytic_transformation)
+            wtask.parameters["source_to_target"].append(analytic_transformation)
 
     select = create_sql_select(logger, wtask, tables)
     query_list = [",\n".join(select), "\n".join(frm), "\n".join(where), ";\n"]
@@ -1121,10 +1104,10 @@ def create_sql_select(logger: ILogger, task: dict, tables: dict) -> str:
     # for each column in the source_to_target we identify the source table and column,
     # or where there is transformation use that in place of the source table and column,
     # and target column.
-    for i, column in enumerate(task["parameters"]["source_to_target"]):
+    for i, column in enumerate(task.parameters["source_to_target"]):
         prefix = "select " if i == 0 else "       "
         source_name = (
-            task["parameters"]["driving_table"]
+            task.parameters["driving_table"]
             if not "source_name" in column.keys()
             else column["source_name"]
         )
@@ -1177,14 +1160,14 @@ def create_sql_conditions(logger: ILogger, task: dict) -> dict:
     """
 
     logger.info(f"{pop_stack()} - STARTED".center(100, "-"))
-    tables = {task["parameters"]["driving_table"]: "a"}
+    tables = {task.parameters["driving_table"]: "a"}
     i = 1
     frm = [
         f"  from {task['parameters']['driving_table']} {tables[task['parameters']['driving_table']]}"
     ]
     logger.info(f"{pop_stack()} - identifying join conditions")
-    if "joins" in task["parameters"].keys():
-        for j in task["parameters"]["joins"]:
+    if "joins" in task.parameters.keys():
+        for j in task.parameters["joins"]:
 
             join = Join(
                 j["right"],
@@ -1257,11 +1240,11 @@ def create_sql_conditions(logger: ILogger, task: dict) -> dict:
                     condition=LogicOperator.AND,
                     operator=Operator(c["operator"]),
                 )
-                for c in task["parameters"]["where"]
+                for c in task.parameters["where"]
             ],
             tables,
         )
-        if "where" in task["parameters"].keys()
+        if "where" in task.parameters.keys()
         else ""
     )
 
