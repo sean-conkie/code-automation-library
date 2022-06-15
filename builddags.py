@@ -74,8 +74,13 @@ def main(logger: ILogger, args: argparse.Namespace) -> int:
         # for each item in the task array, check the operator type and use this
         # to determine the task parameters to be used
         for t in cfg["tasks"]:
+            task = Task(
+                t.get("task_id"),
+                t.get("operator"),
+                t.get("parameters"),
+                t.get("dependencies"),
+            )
             logger.info(f'creating task "{task.task_id}" - {pop_stack()}')
-            task = Task(t["task_id"], t["operator"], t["parameters"], t["dependencies"])
             if task.operator == TaskOperator.CREATETABLE.value:
                 # for each task, add a new one to cfg["tasks"] with data check tasks.
                 if (
@@ -114,10 +119,10 @@ def main(logger: ILogger, args: argparse.Namespace) -> int:
                     if len(dep_list) > 1:
                         dep_task = f"ext_{dep_list[1]}"
                         if not dep_task in [t.split(" ")[0].strip() for t in tasks]:
-                            ext_task = {
-                                "task_id": f"{dep_task}",
-                                "operator": "ExternalTaskSensor",
-                                "parameters": {
+                            ext_task = Task(
+                                f"{dep_task}",
+                                "ExternalTaskSensor",
+                                {
                                     "external_dag_id": dep_list[0],
                                     "external_task_id": dep_list[1],
                                     "check_existence": True,
@@ -126,7 +131,7 @@ def main(logger: ILogger, args: argparse.Namespace) -> int:
                                     "failed_states": ["failed", "skipped"],
                                     "mode": "reschedule",
                                 },
-                            }
+                            )
                             tasks.append(create_task(logger, ext_task))
                             dependencies.append(f"start_pipeline >> {dep_task}")
                     else:
@@ -137,7 +142,9 @@ def main(logger: ILogger, args: argparse.Namespace) -> int:
 
         dep_tasks = [d[0].strip() for d in [dep.split(">") for dep in dependencies]]
         final_tasks = [
-            task.task_id for task in cfg["tasks"] if not task.task_id in dep_tasks
+            task.get("task_id")
+            for task in cfg["tasks"]
+            if not task.get("task_id") in dep_tasks
         ]
 
         for task in final_tasks:
@@ -452,7 +459,7 @@ def create_task(logger: ILogger, task: Task) -> str:
                                parameters - {task.parameters}"""
     )
 
-    outp = [f"{task.task_id} = {task['operator']}(task_id='{task.task_id}'"]
+    outp = [f"{task.task_id} = {task.operator} (task_id='{task.task_id}'"]
 
     # for each key:value pair in the task parameters we perform checks based on
     # parameter type and create a value that can be appended to the string
@@ -463,12 +470,14 @@ def create_task(logger: ILogger, task: Task) -> str:
             value = f"f'''{task.parameters[key]}'''"
         elif key == "params":
             value = {}
-            for p in task.parameters["params"].keys():
-                value[p] = (
-                    "f'{dataset_publish}'"
-                    if task.parameters[key][p] == "{dataset_publish}"
-                    else f'{task.parameters["params"][p]}'
-                )
+            params = task.parameters.get("params")
+            if params:
+                for p in params.keys():
+                    value[p] = (
+                        "f'{dataset_publish}'"
+                        if task.parameters[key][p] == "{dataset_publish}"
+                        else f"{params[p]}"
+                    )
 
         else:
             value = f"{task.parameters[key]}"

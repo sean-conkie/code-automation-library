@@ -2,6 +2,7 @@ import re
 
 from enum import Enum
 from lib.logger import ILogger, pop_stack
+from typing import Union
 from unittest.util import strclass
 from warnings import warn
 
@@ -24,11 +25,12 @@ __all__ = [
 ]
 
 
-class ConversionType(enum):
+class ConversionType(Enum):
     WHERE = "where"
     ANALYTIC = "analytic"
     JOIN = "join"
     DELTA = "delta"
+    SOURCE = "source_to_target"
 
 
 class LogicOperator(Enum):
@@ -110,7 +112,10 @@ class Condition(object):
         self._operator = operator
 
     def __str__(self) -> str:
-        return f"{self._condition.value} {self._fields[0]} {self._operator.value} {self._fields[1]}"
+        return str(todict(self))
+
+    def __repr__(self):
+        return str(self)
 
     @property
     def fields(self) -> str:
@@ -168,6 +173,12 @@ class Join(object):
         self._right = right
         self._on = on
         self._join_type = join_type
+
+    def __str__(self) -> str:
+        return str(todict(self))
+
+    def __repr__(self):
+        return str(self)
 
     @property
     def right(self) -> str:
@@ -236,27 +247,19 @@ class Field(object):
         pk: bool = None,
         hk: bool = None,
     ) -> None:
-        if transformation:
-            self._transformation = transformation
-        elif source_column:
-            self._source_column = source_column
-            self._source_name = source_name
-        else:
-            raise ValueError(
-                "Either 'transformation' or 'source_name' must be provided."
-            )
 
+        self._transformation = transformation
+        self._source_column = source_column
+        self._source_name = source_name
         self._name = name
         self._pk = pk
         self._hk = hk
 
     def __str__(self) -> str:
-        source = (
-            self._transformation
-            if self._transformation
-            else f"{self._source_name}.{self._source_column}"
-        )
-        return f"{source} {self._name}"
+        return str(todict(self))
+
+    def __repr__(self):
+        return str(self)
 
     @property
     def name(self) -> str:
@@ -280,7 +283,7 @@ class Field(object):
         return self._source_column
 
     @source_column.setter
-    def name(self, value: str) -> None:
+    def source_column(self, value: str) -> None:
         """
         Sets the source_column
         """
@@ -356,8 +359,11 @@ class Task(object):
         self._parameters = parameters
         self._dependencies = dependencies
 
-    def __str__(self):
-        return todict(self)
+    def __str__(self) -> str:
+        return str(todict(self))
+
+    def __repr__(self):
+        return str(self)
 
     @property
     def task_id(self) -> str:
@@ -416,10 +422,10 @@ class Delta(object):
         self._upper_bound = upper_bound
 
     def __str__(self) -> str:
-        return f"""field:         {self._field}
-        lower_bound:  {self._lower_bound}
-        _upper_bound: {self._upper_bound}
-        """
+        return str(todict(self))
+
+    def __repr__(self):
+        return str(self)
 
     @property
     def field(self) -> Field:
@@ -470,6 +476,12 @@ class Analytic(object):
         self._column = column
         self._offset = offset
         self._default = default
+
+    def __str__(self) -> str:
+        return str(todict(self))
+
+    def __repr__(self):
+        return str(self)
 
     @property
     def partition(self) -> Field:
@@ -562,6 +574,12 @@ class UpdateTask(object):
         self._source_to_target = source_to_target
         self._tables = tables
         self._where = where
+
+    def __str__(self) -> str:
+        return str(todict(self))
+
+    def __repr__(self):
+        return str(self)
 
     @property
     def target_dataset(self):
@@ -692,6 +710,12 @@ class SQLParameter(object):
         self._destination_dataset = destination_dataset
         self._staging_dataset = staging_dataset
         self._history = history
+
+    def __str__(self) -> str:
+        return str(todict(self))
+
+    def __repr__(self):
+        return str(self)
 
     @property
     def block_data_check(self) -> bool:
@@ -877,8 +901,10 @@ class SQLTask(Task):
         """
         field_list = []
         for p in fields:
-            source_name = p.get("source_name", self.parameters.driving_table)
-            source_column = p.get("source_column")
+            source_name = (
+                p.source_name if p.source_name else self.parameters.driving_table
+            )
+            source_column = p.source_column
             field_list.append(
                 f"{source_name}.{source_column}"
                 if source_column
@@ -932,6 +958,12 @@ class SQLDataCheckParameter(object):
     def __init__(self, sql: str, params: dict = None) -> None:
         self._sql = sql
         self._params = params
+
+    def __str__(self) -> str:
+        return str(todict(self))
+
+    def __repr__(self):
+        return str(self)
 
     @property
     def sql(self) -> str:
@@ -1036,43 +1068,38 @@ def todict(obj, classkey=None):
 
 
 def converttoobj(
-    logger: ILogger,
+    input: Union[list, dict],
     conversiontype: ConversionType,
-    input_dict: dict = None,
-    input_list: list = None,
-):
-
+) -> Union[Analytic, Delta, list[Join], list[Condition]]:
     """
-    > This function takes a dictionary or list of dictionaries and converts it to an object
+    It takes a list or dictionary and converts it to a list of Join or Condition objects
 
     Args:
-      logger (ILogger): ILogger - this is the logger object that is used to log messages to the console.
-      conversiontype (ConversionType): The type of object to be output, determines input required:
-        Analytic: input_dict required
-        Delta: input_dict required
-        Join: input_list required
-        Where: input_list required
-      input_dict (dict): This is the dictionary that you want to convert to an object.
-      input_list (list): This is the dictionary list that you want to convert to an object.
+      input (Union[list, dict]): The input to be converted to the object.
+      conversiontype (ConversionType): The type of conversion you want to perform.
 
     Returns:
-      The requested object type
+      Analytic, Delta, list[Join] or list[Condition] depending on the selected conversion
+      type
     """
-    logger.info(f"{pop_stack()} - STARTED".center(100, "-"))
-    logger.debug(f"{pop_stack()} - generating {conversiontype.value}".center(100, "-"))
 
-    if conversiontype in [ConversionType.JOIN, ConversionType.WHERE]:
-        if not input_dict and not input_list:
-            raise ValueError(
+    if not input:
+        return None
+    elif conversiontype in [
+        ConversionType.JOIN,
+        ConversionType.WHERE,
+        ConversionType.SOURCE,
+    ]:
+        if not type(input) == list:
+            warn(
                 f"A list input must be provided for conversion to {conversiontype.value}"
             )
-        input = input_list if input_list else input_dict
+            input = [input]
     elif conversiontype in [ConversionType.ANALYTIC, ConversionType.DELTA]:
-        if not input_dict:
+        if not type(input) == dict:
             raise ValueError(
                 f"A dictionary input must be provided for conversion to {conversiontype.value}"
             )
-        input = input_dict
 
     if conversiontype == ConversionType.ANALYTIC:
         obj = Analytic(
@@ -1085,7 +1112,7 @@ def converttoobj(
                     pk=field.get("pk"),
                     hk=field.get("hk"),
                 )
-                for field in input["partition"]
+                for field in input.get("partition")
             ],
             [
                 Field(
@@ -1096,8 +1123,9 @@ def converttoobj(
                     pk=field.get("pk"),
                     hk=field.get("hk"),
                 )
-                for field in input["driving_column"]
+                for field in input.get("order")
             ],
+            AnalyticType(input.get("type")),
             [
                 Field(
                     name=field.get("name"),
@@ -1107,8 +1135,18 @@ def converttoobj(
                     pk=field.get("pk"),
                     hk=field.get("hk"),
                 )
-                for field in input["order"]
+                for field in input.get("driving_column")
             ],
+            Field(
+                name=input.get("column", {}).get("name"),
+                source_column=input.get("column", {}).get("source_column"),
+                source_name=input.get("column", {}).get("source_name"),
+                transformation=input.get("column", {}).get("transformation"),
+                pk=input.get("column", {}).get("pk"),
+                hk=input.get("column", {}).get("hk"),
+            ),
+            input.get("offset"),
+            input.get("default"),
         )
 
     elif conversiontype == ConversionType.DELTA:
@@ -1132,17 +1170,7 @@ def converttoobj(
                 j.get("right"),
                 [
                     Condition(
-                        [
-                            Field(
-                                name=field.get("name"),
-                                source_column=field.get("source_column"),
-                                source_name=field.get("source_name"),
-                                transformation=field.get("transformation"),
-                                pk=field.get("pk"),
-                                hk=field.get("hk"),
-                            )
-                            for field in c.get("fields", [])
-                        ],
+                        [field for field in c.get("fields", [])],
                         operator=Operator(c.get("operator", "=")),
                         condition=LogicOperator(c.get("condition", "and").lower()),
                     )
@@ -1153,25 +1181,27 @@ def converttoobj(
             )
             for j in input
         ]
+
+    elif conversiontype == ConversionType.SOURCE:
+        obj = [
+            Field(
+                name=field.get("name"),
+                source_column=field.get("source_column"),
+                source_name=field.get("source_name"),
+                transformation=field.get("transformation"),
+                pk=field.get("pk"),
+                hk=field.get("hk"),
+            )
+            for field in input
+        ]
     elif conversiontype == ConversionType.WHERE:
         obj = [
             Condition(
-                [
-                    Field(
-                        name=field.get("name"),
-                        source_column=field.get("source_column"),
-                        source_name=field.get("source_name"),
-                        transformation=field.get("transformation"),
-                        pk=field.get("pk"),
-                        hk=field.get("hk"),
-                    )
-                    for field in c.get("fields", [])
-                ],
+                [field for field in c.get("fields", [])],
                 operator=Operator(c.get("operator", "=")),
                 condition=LogicOperator(c.get("condition", "and").lower()),
             )
             for c in input
         ]
 
-    logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100, "-"))
     return obj
