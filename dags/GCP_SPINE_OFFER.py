@@ -343,6 +343,7 @@ with DAG(
 
     # Define task dependencies
     start_pipeline >> load_teams
+    start_pipeline >> delta_table
     start_pipeline >> dim_offer_type
     start_pipeline >> td_offer_status_core
     start_pipeline >> td_offer_priceable_unit_core

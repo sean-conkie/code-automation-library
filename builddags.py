@@ -6,6 +6,13 @@ import re
 import sys
 import traceback
 
+from lib.baseclasses import (
+    TaskOperator,
+    Task,
+    SQLDataCheckTask,
+    SQLDataCheckParameter,
+    todict,
+)
 from datetime import datetime
 from jinja2 import Environment, FileSystemLoader
 from lib.jsonhelper import get_json
@@ -66,73 +73,78 @@ def main(logger: ILogger, args: argparse.Namespace) -> int:
 
         # for each item in the task array, check the operator type and use this
         # to determine the task parameters to be used
-        for task in cfg["tasks"]:
-            logger.info(f'creating task "{task["task_id"]}" - {pop_stack()}')
-            if task["operator"] == "CreateTable":
+        for t in cfg["tasks"]:
+            task = Task(
+                t.get("task_id"),
+                t.get("operator"),
+                t.get("parameters"),
+                t.get("dependencies"),
+            )
+            logger.info(f'creating task "{task.task_id}" - {pop_stack()}')
+            if task.operator == TaskOperator.CREATETABLE.value:
                 # for each task, add a new one to cfg["tasks"] with data check tasks.
                 if (
-                    "block_data_check" not in task["parameters"].keys()
-                    or not task["parameters"]["block_data_check"]
+                    "block_data_check" not in task.parameters.keys()
+                    or not task.parameters["block_data_check"]
                 ):
                     data_check_tasks = create_data_check_tasks(
                         logger, task, cfg["properties"]
                     )
-                    for t in data_check_tasks:
-                        if not t in cfg["tasks"]:
-                            cfg["tasks"].append(t)
+                    for d in data_check_tasks:
+                        if not d in cfg["tasks"]:
+                            cfg["tasks"].append(d)
 
-                task["parameters"] = create_table_task(logger, task, cfg["properties"])
-                task["operator"] = "BigQueryOperator"
+                task.parameters = create_table_task(logger, task, cfg["properties"])
+                task.operator = TaskOperator.BQOPERATOR.value
 
-            elif task["operator"] == "TruncateTable":
-                task["parameters"] = create_table_task(logger, task, cfg["properties"])
-                task["operator"] = "BigQueryOperator"
+            elif task.operator == "TruncateTable":
+                task.parameters = create_table_task(logger, task, cfg["properties"])
+                task.operator = TaskOperator.BQOPERATOR.value
 
-            elif task["operator"] == "DataCheck":
-                task["operator"] = "BigQueryCheckOperator"
+            elif task.operator == "DataCheck":
+                task.operator = TaskOperator.BQCHEK.value
 
-            elif task["operator"] == "LoadFromGCS":
-                task["parameters"] = create_gcs_load_task(
-                    logger, task, cfg["properties"]
-                )
-                task["operator"] = "GoogleCloudStorageToBigQueryOperator"
+            elif task.operator == TaskOperator.LOADFROMGCS.value:
+                task.parameters = create_gcs_load_task(logger, task, cfg["properties"])
+                task.operator = TaskOperator.GCSTOBQ.value
 
             tasks.append(create_task(logger, task))
 
-            if "dependencies" in task.keys():
-                if len(task["dependencies"]) > 0:
-                    # for each entry in the dependencies array, add the item as a dependency.
-                    # where the dependency is on an external task, create an external task if
-                    # no task already exists
-                    for dep in task["dependencies"]:
-                        dep_list = dep.split(".")
-                        if len(dep_list) > 1:
-                            dep_task = f"ext_{dep_list[1]}"
-                            if not dep_task in [t.split(" ")[0].strip() for t in tasks]:
-                                ext_task = {
-                                    "task_id": f"{dep_task}",
-                                    "operator": "ExternalTaskSensor",
-                                    "parameters": {
-                                        "external_dag_id": dep_list[0],
-                                        "external_task_id": dep_list[1],
-                                        "check_existence": True,
-                                        "timeout": 600,
-                                        "allowed_states": ["success"],
-                                        "failed_states": ["failed", "skipped"],
-                                        "mode": "reschedule",
-                                    },
-                                }
-                                tasks.append(create_task(logger, ext_task))
-                                dependencies.append(f"start_pipeline >> {dep_task}")
-                        else:
-                            dep_task = dep
-                        dependencies.append(f"{dep_task} >> {task['task_id']}")
-                else:
-                    dependencies.append(f"start_pipeline >> {task['task_id']}")
+            if len(task.dependencies) > 0:
+                # for each entry in the dependencies array, add the item as a dependency.
+                # where the dependency is on an external task, create an external task if
+                # no task already exists
+                for dep in task.dependencies:
+                    dep_list = dep.split(".")
+                    if len(dep_list) > 1:
+                        dep_task = f"ext_{dep_list[1]}"
+                        if not dep_task in [t.split(" ")[0].strip() for t in tasks]:
+                            ext_task = Task(
+                                f"{dep_task}",
+                                "ExternalTaskSensor",
+                                {
+                                    "external_dag_id": dep_list[0],
+                                    "external_task_id": dep_list[1],
+                                    "check_existence": True,
+                                    "timeout": 600,
+                                    "allowed_states": ["success"],
+                                    "failed_states": ["failed", "skipped"],
+                                    "mode": "reschedule",
+                                },
+                            )
+                            tasks.append(create_task(logger, ext_task))
+                            dependencies.append(f"start_pipeline >> {dep_task}")
+                    else:
+                        dep_task = dep
+                    dependencies.append(f"{dep_task} >> {task.task_id}")
+            else:
+                dependencies.append(f"start_pipeline >> {task.task_id}")
 
         dep_tasks = [d[0].strip() for d in [dep.split(">") for dep in dependencies]]
         final_tasks = [
-            task["task_id"] for task in cfg["tasks"] if not task["task_id"] in dep_tasks
+            task.get("task_id")
+            for task in cfg["tasks"]
+            if not task.get("task_id") in dep_tasks
         ]
 
         for task in final_tasks:
@@ -169,32 +181,32 @@ def main(logger: ILogger, args: argparse.Namespace) -> int:
     return 0
 
 
-def create_data_check_tasks(logger: ILogger, task: dict, properties: dict) -> list:
+def create_data_check_tasks(logger: ILogger, task: Task, properties: dict) -> list:
     """
-    This function creates a list of data check tasks for a given table
+    This function creates a list of data check tasks for a given task
 
     Args:
       logger (ILogger): ILogger - this is the logger object that is passed to the function.
-      task (dict): the task object from the config file
+      task (Task): The task object that is being created.
       properties (dict): a dictionary of properties that are used to create the DAG.
 
     Returns:
-      A list of dictionaries which represent the tasks.
+      A list of data check tasks.
     """
     logger.info(f"{pop_stack()} STARTED".center(100, "-"))
     data_check_tasks = []
 
-    if "source_to_target" in task["parameters"].keys():
+    if "source_to_target" in task.parameters.keys():
         table_keys = [
             field["name"]
-            for field in task["parameters"]["source_to_target"]
-            if "pk" in field.keys() and field["pk"] == True
+            for field in task.parameters["source_to_target"]
+            if "pk" in field.keys()
         ]
 
         history_keys = [
             field["name"]
-            for field in task["parameters"]["source_to_target"]
-            if "hk" in field.keys() and field["hk"] == True
+            for field in task.parameters["source_to_target"]
+            if "hk" in field.keys()
         ]
     else:
         table_keys = []
@@ -202,43 +214,43 @@ def create_data_check_tasks(logger: ILogger, task: dict, properties: dict) -> li
 
     logger.info(f"creating row count check")
     dataset = (
-        task["parameters"]["destination_dataset"]
-        if "destination_dataset" in task["parameters"].keys()
+        task.parameters["destination_dataset"]
+        if "destination_dataset" in task.parameters.keys()
         else properties["dataset_publish"]
     )
-    table = task["parameters"]["destination_table"]
-    row_count_check_task = {
-        "task_id": f"{task['parameters']['destination_table']}_data_check_row_count",
-        "operator": "DataCheck",
-        "parameters": {"sql": f"select count(*) from {dataset}.{table}"},
-        "dependencies": [f"{task['task_id']}"],
-    }
-    data_check_tasks.append(row_count_check_task)
+    table = task.parameters["destination_table"]
+    row_count_check_task = SQLDataCheckTask(
+        f"{task.parameters['destination_table']}_data_check_row_count",
+        TaskOperator.DATACHECK,
+        SQLDataCheckParameter(f"select count(*) from {dataset}.{table}"),
+        [f"{task.task_id}"],
+    )
+    data_check_tasks.append(todict(row_count_check_task))
 
     # create task to check for duplicates on primary key - if primary key
     # fields specified in config.
     if len(table_keys) > 0:
         logger.info(f"creating duplicate data check")
-        dupe_check_task = {
-            "task_id": f"{task['parameters']['destination_table']}_data_check_duplicate_records",
-            "operator": "DataCheck",
-            "parameters": {
-                "sql": "sql/data_check_duplicate_records.sql",
-                "params": {
-                    "DATASET_ID": f"{task['parameters']['destination_dataset']}"
-                    if "destination_dataset" in task["parameters"].keys()
+        dupe_check_task = SQLDataCheckTask(
+            f"{task.parameters['destination_table']}_data_check_duplicate_records",
+            TaskOperator.DATACHECK,
+            SQLDataCheckParameter(
+                "sql/data_check_duplicate_records.sql",
+                params={
+                    "DATASET_ID": f"{task.parameters['destination_dataset']}"
+                    if "destination_dataset" in task.parameters.keys()
                     else f"{properties['dataset_publish']}",
-                    "FROM": f"{task['parameters']['destination_table']}",
+                    "FROM": f"{task.parameters['destination_table']}",
                     "KEY": f"{', '.join(table_keys)}",
                 },
-            },
-            "dependencies": [task["task_id"]],
-        }
-        data_check_tasks.append(dupe_check_task)
+            ),
+            [task.task_id],
+        )
+        data_check_tasks.append(todict(dupe_check_task))
 
     # create task to check for multiple open records - if primary key
     # fields specified in config.
-    if len(table_keys) > 0 and task["parameters"]["target_type"] == 2:
+    if len(table_keys) > 0 and task.parameters["target_type"] == 2:
         logger.info(f"creating duplicate active history data check")
         dates = [
             "effective_from_dt",
@@ -246,36 +258,36 @@ def create_data_check_tasks(logger: ILogger, task: dict, properties: dict) -> li
             "effective_from_dt_seq",
             "effective_to_dt",
         ]
-        dupe_check_task = {
-            "task_id": f"{task['parameters']['destination_table']}_data_check_open_history_items",
-            "operator": "DataCheck",
-            "parameters": {
-                "sql": "sql/data_check_open_history_items.sql",
-                "params": {
-                    "DATASET_ID": f"{task['parameters']['destination_dataset']}"
-                    if "destination_dataset" in task["parameters"].keys()
+        dupe_check_task = SQLDataCheckTask(
+            f"{task.parameters['destination_table']}_data_check_open_history_items",
+            TaskOperator.DATACHECK,
+            SQLDataCheckParameter(
+                "sql/data_check_open_history_items.sql",
+                params={
+                    "DATASET_ID": f"{task.parameters['destination_dataset']}"
+                    if "destination_dataset" in task.parameters.keys()
                     else f"{properties['dataset_publish']}",
-                    "FROM": f"{task['parameters']['destination_table']}",
+                    "FROM": f"{task.parameters['destination_table']}",
                     "KEY": f"{', '.join(history_keys)}",
                 },
-            },
-            "dependencies": [task["task_id"]],
-        }
-        data_check_tasks.append(dupe_check_task)
+            ),
+            [task.task_id],
+        )
+        data_check_tasks.append(todict(dupe_check_task))
 
     logger.info(f"dag files {pop_stack()} COMPLETED SUCCESSFULLY".center(100, "-"))
     return data_check_tasks
 
 
-def create_gcs_load_task(logger: ILogger, task: dict, properties: dict) -> dict:
+def create_gcs_load_task(logger: ILogger, task: Task, properties: dict) -> dict:
     """
     This function creates a task that loads data from a Google Cloud Storage bucket into a BigQuery
     table
 
     Args:
-      logger (ILogger): ILogger
-      task (dict): the task dictionary from the task file
-      properties (dict): {
+      logger (ILogger): ILogger - this is the logger object that is passed to the function.
+      task (Task): the task object from the task list
+      properties (dict): dict
 
     Returns:
       A dictionary with the following keys:
@@ -289,34 +301,33 @@ def create_gcs_load_task(logger: ILogger, task: dict, properties: dict) -> dict:
         skip_leading_rows
         schema_object
     """
-
     logger.info(f"{pop_stack()} STARTED".center(100, "-"))
     gs_source_bucket = (
         "{gs_source_bucket}"
-        if not "bucket" in task["parameters"].keys()
-        else task["parameters"]["bucket"]
+        if not "bucket" in task.parameters.keys()
+        else task.parameters["bucket"]
     )  # set to use variable from target file if not in task parameters
 
     dataset_source = (
         "{dataset_source}"
-        if not "destination_dataset" in task["parameters"].keys()
-        else task["parameters"]["destination_dataset"]
+        if not "destination_dataset" in task.parameters.keys()
+        else task.parameters["destination_dataset"]
     )
 
     destination_dataset_table = (
-        f"{dataset_source}.{task['parameters']['destination_table']}"
+        f"{dataset_source}.{task.parameters['destination_table']}"
     )
 
     write_disposition = (
         "WRITE_APPEND"
-        if not "write_disposition" in task["parameters"].keys()
-        else f"{task['parameters']['write_disposition']}"
+        if not "write_disposition" in task.parameters.keys()
+        else f"{task.parameters['write_disposition']}"
     )
 
-    if "source_format" in task["parameters"].keys():
-        source_format = f"{task['parameters']['source_format']}"
+    if "source_format" in task.parameters.keys():
+        source_format = f"{task.parameters['source_format']}"
     else:
-        obj = task["parameters"]["source_objects"][0]
+        obj = task.parameters["source_objects"][0]
         obj_ext = pathlib.Path(os.path.normpath(obj)).suffix
 
         if obj_ext == ".json":
@@ -324,13 +335,13 @@ def create_gcs_load_task(logger: ILogger, task: dict, properties: dict) -> dict:
         else:
             source_format = obj_ext.replace(".", "").upper()
 
-    obj = os.path.basename(task["parameters"]["schema_object"])
+    obj = os.path.basename(task.parameters["schema_object"])
     schema_object = f"schema/{obj}"
-    schema_source = os.path.normpath(task["parameters"]["schema_object"])
+    schema_source = os.path.normpath(task.parameters["schema_object"])
     schema_target = os.path.normpath(f"dags/{schema_object}")
     if not os.path.isfile(schema_source):
-        logger.debug(f'      task id: {task["task_id"]}')
-        logger.debug(f'schema object: {task["parameters"]["schema_object"]}')
+        logger.debug(f"      task id: {task.task_id}")
+        logger.debug(f'schema object: {task.parameters["schema_object"]}')
         raise FileNotFoundError(f"'{schema_source}' not found.")
     # if schema file doesn't exist in dags/schema/ dir then copy it
     if not os.path.isfile(schema_target) and os.path.isfile(schema_source):
@@ -342,14 +353,14 @@ def create_gcs_load_task(logger: ILogger, task: dict, properties: dict) -> dict:
 
     field_delimiter = (
         ","
-        if not "field_delimiter" in task["parameters"].keys()
-        else f"{task['parameters']['field_delimiter']}"
+        if not "field_delimiter" in task.parameters.keys()
+        else f"{task.parameters['field_delimiter']}"
     )
 
     skip_leading_rows = (
         1
-        if not "skip_leading_rows" in task["parameters"].keys()
-        else f"{task['parameters']['skip_leading_rows']}"
+        if not "skip_leading_rows" in task.parameters.keys()
+        else f"{task.parameters['skip_leading_rows']}"
     )
 
     outp = {
@@ -357,7 +368,7 @@ def create_gcs_load_task(logger: ILogger, task: dict, properties: dict) -> dict:
         "destination_dataset_table": destination_dataset_table,
         "write_disposition": write_disposition,
         "create_disposition": "CREATE_IF_NEEDED",
-        "source_objects": task["parameters"]["source_objects"],
+        "source_objects": task.parameters["source_objects"],
         "source_format": source_format,
         "field_delimiter": field_delimiter,
         "skip_leading_rows": skip_leading_rows,
@@ -368,43 +379,53 @@ def create_gcs_load_task(logger: ILogger, task: dict, properties: dict) -> dict:
     return outp
 
 
-def create_table_task(logger: ILogger, task: dict, properties: dict) -> dict:
-    """Method for generating parameters dictionary for standard create table sql.
+def create_table_task(logger: ILogger, task: Task, properties: dict) -> dict:
+    """
+    This function creates a table in the publish dataset using the sql file created in the previous step
 
-    Uses the task object to populate the required parameters for the BigQueryOperator.
+    Args:
+      logger (ILogger): ILogger - this is the logger object that is passed to the function.
+      task (Task): the task object from the task file
+      properties (dict): a dictionary of properties that are used in the pipeline.
 
-    args:
-        task: A dictionary of representing a task to be added to the DAG.  Used to
-              create a task parameter string
-        properties: DAG properties.  Used to obtain DAG level properties, such as
-                    the staging dataset
-
-    returns:
-        A dictionary containing expected parameters for the desired task (BigQueryOperator)
+    Returns:
+      A dictionary with the following keys:
+        - sql
+        - destination_dataset_table
+        - write_disposition
+        - create_disposition
+        - allow_large_results
+        - use_legacy_sql
+        - params
     """
 
     logger.info(f"{pop_stack()} STARTED".center(100, "-"))
     dataset_staging = properties["dataset_staging"]
     dataset_publish = (
         "{dataset_publish}"
-        if not "destination_dataset" in task["parameters"].keys()
-        else task["parameters"]["destination_dataset"]
+        if not "destination_dataset" in task.parameters.keys()
+        else task.parameters["destination_dataset"]
     )  # set to use variable from target file if not in task parameters
     destination_dataset_table = (
-        f"{dataset_publish}.{task['parameters']['destination_table']}"
+        f"{dataset_publish}.{task.parameters['destination_table']}"
     )
 
     # if user has provided a link to a .sql file, use it otherwise look to create .sql from source to target parameter
-    if "sql" in task["parameters"].keys():
-        sql = task["parameters"]["sql"]
+    if "sql" in task.parameters.keys():
+        sql = task.parameters["sql"]
     else:
+        task.parameters["source_to_target"] = [
+            field
+            for field in task.parameters["source_to_target"]
+            if not field["name"] in ["dw_created_dt", "dw_last_modified_dt"]
+        ]
         file_path = create_sql_file(logger, task, dataset_staging=dataset_staging)
         sql = f"{file_path.replace('./','')}"
 
     write_disposition = (
         "WRITE_TRUNCATE"
-        if not "write_disposition" in task["parameters"].keys()
-        else f"{task['parameters']['write_disposition']}"
+        if not "write_disposition" in task.parameters.keys()
+        else f"{task.parameters['write_disposition']}"
     )
 
     outp = {
@@ -421,46 +442,45 @@ def create_table_task(logger: ILogger, task: dict, properties: dict) -> dict:
     return outp
 
 
-def create_task(logger: ILogger, task: dict) -> str:
-    """Method for generating a string of python that defines a task.
+def create_task(logger: ILogger, task: Task) -> str:
+    """
+    > The function takes a task object and returns a string that can be used to create a task in Airflow
 
-    args:
-        task: A dictionary representing a task to be added to the DAG.  Used to
-              task parameter string
+    Args:
+      logger (ILogger): ILogger - the logger object
+      task (Task): the task object
 
-    returns:
-        A string of python code that can be added to the target file
+    Returns:
+      A string that can be used to create a task in Airflow
     """
     logger.info(f"{pop_stack()} STARTED".center(100, "-"))
     logger.debug(
-        f"""creating task {task["task_id"]} from:
-                               parameters - {task["parameters"]}"""
+        f"""creating task {task.task_id} from:
+                               parameters - {task.parameters}"""
     )
 
-    outp = [f"{task['task_id']} = {task['operator']}(task_id='{task['task_id']}'"]
+    outp = [f"{task.task_id} = {task.operator} (task_id='{task.task_id}'"]
 
-    # for each key:value pair in the tark parameters we perform checks based on
+    # for each key:value pair in the task parameters we perform checks based on
     # parameter type and create a value that can be appended to the string
-    for key in task["parameters"].keys():
-        if (
-            type(task["parameters"][key]) == int
-            or type(task["parameters"][key]) == bool
-        ):
-            value = task["parameters"][key]
-        elif type(task["parameters"][key]) == str:
-            value = f"f'''{task['parameters'][key]}'''"
+    for key in task.parameters.keys():
+        if type(task.parameters[key]) == int or type(task.parameters[key]) == bool:
+            value = task.parameters[key]
+        elif type(task.parameters[key]) == str:
+            value = f"f'''{task.parameters[key]}'''"
         elif key == "params":
-            # value = f"{{'dataset_publish': f'{task['parameters'][key]['dataset_publish']}'}}"
             value = {}
-            for p in task["parameters"]["params"].keys():
-                value[p] = (
-                    "f'{dataset_publish}'"
-                    if task["parameters"][key][p] == "{dataset_publish}"
-                    else f'{task["parameters"]["params"][p]}'
-                )
+            params = task.parameters.get("params")
+            if params:
+                for p in params.keys():
+                    value[p] = (
+                        "f'{dataset_publish}'"
+                        if task.parameters[key][p] == "{dataset_publish}"
+                        else f"{params[p]}"
+                    )
 
         else:
-            value = f"{task['parameters'][key]}"
+            value = f"{task.parameters[key]}"
 
         outp.append(f"{key} = {value}")
     outp.append("dag=dag)")
@@ -470,18 +490,17 @@ def create_task(logger: ILogger, task: dict) -> str:
 
 
 def create_dag_string(logger: ILogger, name: str, dag: dict) -> str:
-    """Method for generating a string of python that defines a dag.
-
-    DAG parameters are provided and used to populate a string which can be
-    added to the target file.
-
+    """
+    > This function takes a dictionary of DAG parameters and returns a string that can be used to create
+    a DAG object in Airflow
 
     Args:
+      logger (ILogger): ILogger - this is the logger object that is passed to the function
       name (str): The name of the DAG.
-      dag (dict): A dictionary representing the DAG.  Used to create dag string
+      dag (dict): properties of the DAG
 
     Returns:
-      A string of python code that can be added to the target file
+      A string that is the DAG definition
     """
     logger.info(f"{pop_stack()} STARTED".center(100, "-"))
     # we first set DAG defaults - these can also be excluded completely and
@@ -521,14 +540,15 @@ def create_dag_string(logger: ILogger, name: str, dag: dict) -> str:
 
 def create_dag_args(logger: ILogger, args: dict) -> str:
     """
-    > This function takes a dictionary of arguments and returns a string that can be used to create a
-    DAG in Airflow
+    It takes a dictionary of arguments and returns a string that can be used to create a DAG object in
+    Airflow
 
     Args:
+      logger (ILogger): ILogger - the logger object
       args (dict): dict = {
 
     Returns:
-      A string that is a dictionary of arguments for the DAG.
+      A string that is a dictionary of the arguments for the DAG.
     """
     logger.info(f"{pop_stack()} STARTED".center(100, "-"))
     oargs = {

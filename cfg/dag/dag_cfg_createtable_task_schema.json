@@ -93,9 +93,16 @@
                   "properties": {
                     "operator": {
                       "type": "string",
-                      "title": "The operator",
+                      "title": "The operator, i.e =, !=",
                       "examples": [
                         "="
+                      ]
+                    },
+                    "condition": {
+                      "type": "string",
+                      "title": "The logic operator, i.e. AND, OR",
+                      "examples": [
+                        "AND"
                       ]
                     },
                     "fields": {
@@ -170,7 +177,7 @@
               },
               "pk": {
                 "type": "boolean",
-                "title": "Set with a true value to identify field as part of table key; no value, no field or false are all interpereted as false"
+                "title": "Indicates field is part of the 'primary' key, which defines each unique record in the target table."
               },
               "hk": {
                 "type": "boolean",
@@ -209,9 +216,16 @@
               "properties": {
                 "operator": {
                   "type": "string",
-                  "title": "The operator",
+                  "title": "The operator, i.e =, !=",
                   "examples": [
                     "="
+                  ]
+                },
+                "condition": {
+                  "type": "string",
+                  "title": "The logic operator, i.e. AND, OR",
+                  "examples": [
+                    "AND"
                   ]
                 },
                 "fields": {
@@ -397,13 +411,6 @@
         "examples": [
           "sql/spine_offer_td_offer_priceable_unit_soip.sql",
           "truncate table uk_pub_customer_spine_offer_is.dim_offer_priceable_unit;"
-        ]
-      },
-      "destination_dataset_table": {
-        "type": "string",
-        "title": "The destination dataset for the target table",
-        "examples": [
-          ""
         ]
       }
     },
