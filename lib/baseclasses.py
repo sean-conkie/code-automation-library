@@ -1,6 +1,7 @@
 import re
 
 from enum import Enum
+from lib.logger import ILogger, pop_stack
 from unittest.util import strclass
 from warnings import warn
 
@@ -19,7 +20,15 @@ __all__ = [
     "SQLParameter",
     "SQLDataCheckParameter",
     "todict",
+    "converttoobj",
 ]
+
+
+class ConversionType(enum):
+    WHERE = "where"
+    ANALYTIC = "analytic"
+    JOIN = "join"
+    DELTA = "delta"
 
 
 class LogicOperator(Enum):
@@ -27,6 +36,14 @@ class LogicOperator(Enum):
     AND = "and"
     OR = "or"
     NOT = "not"
+    NONE = None
+
+
+class AnalyticType(Enum):
+    LAG = "lag"
+    LEAD = "lead"
+    ROWNUM = "row_number"
+    RANK = "rank"
     NONE = None
 
 
@@ -233,6 +250,14 @@ class Field(object):
         self._pk = pk
         self._hk = hk
 
+    def __str__(self) -> str:
+        source = (
+            self._transformation
+            if self._transformation
+            else f"{self._source_name}.{self._source_column}"
+        )
+        return f"{source} {self._name}"
+
     @property
     def name(self) -> str:
         """
@@ -331,6 +356,9 @@ class Task(object):
         self._parameters = parameters
         self._dependencies = dependencies
 
+    def __str__(self):
+        return todict(self)
+
     @property
     def task_id(self) -> str:
         """
@@ -387,6 +415,12 @@ class Delta(object):
         self._lower_bound = lower_bound
         self._upper_bound = upper_bound
 
+    def __str__(self) -> str:
+        return f"""field:         {self._field}
+        lower_bound:  {self._lower_bound}
+        _upper_bound: {self._upper_bound}
+        """
+
     @property
     def field(self) -> Field:
         """Returns the field"""
@@ -418,13 +452,24 @@ class Delta(object):
         self._upper_bound = value
 
 
-class History(object):
+class Analytic(object):
     def __init__(
-        self, partition: Field, driving_column: list[Field], order: list[Field]
+        self,
+        partition: list[Field],
+        order: list[Field],
+        type: AnalyticType = AnalyticType.NONE,
+        driving_column: list[Field] = None,
+        column: Field = None,
+        offset: int = None,
+        default: str = None,
     ) -> None:
         self._partition = partition
         self._driving_column = driving_column
         self._order = order
+        self._type = type
+        self._column = column
+        self._offset = offset
+        self._default = default
 
     @property
     def partition(self) -> Field:
@@ -455,6 +500,46 @@ class History(object):
     def order(self, value: list[Field]) -> None:
         """Sets the order"""
         self._order = value
+
+    @property
+    def type(self) -> AnalyticType:
+        """Returns the type"""
+        return self._type
+
+    @type.setter
+    def type(self, value: AnalyticType) -> None:
+        """Sets the type"""
+        self._type = value
+
+    @property
+    def column(self) -> Field:
+        """Returns the column"""
+        return self._column
+
+    @column.setter
+    def column(self, value: Field) -> None:
+        """Sets the column"""
+        self._column = value
+
+    @property
+    def offset(self) -> int:
+        """Returns the offset"""
+        return self._offset
+
+    @offset.setter
+    def offset(self, value: int) -> None:
+        """Sets the offset"""
+        self._offset = value
+
+    @property
+    def default(self) -> str:
+        """Returns the default"""
+        return self._default
+
+    @default.setter
+    def default(self, value: str) -> None:
+        """Sets the default"""
+        self._default = value
 
 
 # > This class is used to create a SQL query that updates a target table with data from a source table
@@ -535,14 +620,14 @@ class UpdateTask(object):
         self._source_table = value
 
     @property
-    def source_to_target(self):
+    def source_to_target(self) -> list[Field]:
         """
         Returns the source_to_target
         """
         return self._source_to_target
 
     @source_to_target.setter
-    def source_to_target(self, value):
+    def source_to_target(self, value: list[Field]):
         """
         Sets the source_to_target
         """
@@ -590,7 +675,8 @@ class SQLParameter(object):
         where: list[Condition] = None,
         delta: Delta = None,
         destination_dataset: str = None,
-        history: History = None,
+        staging_dataset: str = None,
+        history: Analytic = None,
         block_data_check: bool = False,
     ) -> None:
         self._block_data_check = block_data_check
@@ -604,6 +690,7 @@ class SQLParameter(object):
         self._where = where
         self._delta = delta
         self._destination_dataset = destination_dataset
+        self._staging_dataset = staging_dataset
         self._history = history
 
     @property
@@ -647,22 +734,22 @@ class SQLParameter(object):
         self._driving_table = value
 
     @property
-    def source_to_target(self) -> str:
+    def source_to_target(self) -> list[Field]:
         """Returns the source_to_target"""
         return self._source_to_target
 
     @source_to_target.setter
-    def source_to_target(self, value: str) -> None:
+    def source_to_target(self, value: list[Field]) -> None:
         """Sets the source_to_target"""
         self._source_to_target = value
 
     @property
-    def write_disposition(self) -> str:
+    def write_disposition(self) -> WriteDisposition:
         """Returns the write_disposition"""
         return self._write_disposition
 
     @write_disposition.setter
-    def write_disposition(self, value: str) -> None:
+    def write_disposition(self, value: WriteDisposition) -> None:
         """Sets the write_disposition"""
         self._write_disposition = value
 
@@ -717,12 +804,22 @@ class SQLParameter(object):
         self._destination_dataset = value
 
     @property
-    def history(self) -> History:
+    def staging_dataset(self) -> str:
+        """Returns the staging_dataset"""
+        return self._staging_dataset
+
+    @staging_dataset.setter
+    def staging_dataset(self, value: str) -> None:
+        """Sets the staging_dataset"""
+        self._staging_dataset = value
+
+    @property
+    def history(self) -> Analytic:
         """Returns the history"""
         return self._history
 
     @history.setter
-    def history(self, value: History) -> None:
+    def history(self, value: Analytic) -> None:
         """Sets the history"""
         self._history = value
 
@@ -767,6 +864,68 @@ class SQLTask(Task):
         Sets the parameters
         """
         self._parameters = value
+
+    def __createfieldlist(self, fields: list[Field]) -> str:
+        """
+        It takes a list of fields and returns a string of comma separated field names
+
+        Args:
+          fields (list[Field]): list of Field objects
+
+        Returns:
+          A string of the fields in the field list.
+        """
+        field_list = []
+        for p in fields:
+            source_name = p.get("source_name", self.parameters.driving_table)
+            source_column = p.get("source_column")
+            field_list.append(
+                f"{source_name}.{source_column}"
+                if source_column
+                else f"{p.transformation}"
+            )
+        return ",".join(field_list)
+
+    def add_analytic(self, analytic: Analytic) -> None:
+        """
+        > This function adds an analytic to the source_to_target list
+
+        Args:
+          analytic (Analytic): Analytic object
+
+        Returns:
+          None
+        """
+
+        partition = self.__createfieldlist(analytic.partition)
+        order = self.__createfieldlist(analytic.order)
+
+        source_name = (
+            analytic.column.source_name
+            if analytic.column.source_name
+            else self.parameters.driving_table
+        )
+        source_column = analytic.column.name
+        offset = f", {analytic.offset}" if analytic.offset else ""
+        default = f", {analytic.default}" if analytic.default else ""
+
+        analytic_transformation = Field(
+            name=analytic.column.name,
+            transformation=f"""{analytic.type.value}({source_name}.{source_column}{offset}{default}) 
+            over(partition by {partition} 
+                     order by {order})""",
+        )
+
+        column_list = [c.name for c in self.parameters.source_to_target]
+        if analytic_transformation.name in column_list:
+            for i, c in enumerate(self.parameters.source_to_target):
+                if analytic_transformation.name == c.name:
+                    self.parameters.source_to_target[i] = analytic_transformation
+                    break
+        else:
+            self.parameters.source_to_target.append(analytic_transformation)
+
+        return None
 
 
 class SQLDataCheckParameter(object):
@@ -874,3 +1033,145 @@ def todict(obj, classkey=None):
         return data
     else:
         return obj
+
+
+def converttoobj(
+    logger: ILogger,
+    conversiontype: ConversionType,
+    input_dict: dict = None,
+    input_list: list = None,
+):
+
+    """
+    > This function takes a dictionary or list of dictionaries and converts it to an object
+
+    Args:
+      logger (ILogger): ILogger - this is the logger object that is used to log messages to the console.
+      conversiontype (ConversionType): The type of object to be output, determines input required:
+        Analytic: input_dict required
+        Delta: input_dict required
+        Join: input_list required
+        Where: input_list required
+      input_dict (dict): This is the dictionary that you want to convert to an object.
+      input_list (list): This is the dictionary list that you want to convert to an object.
+
+    Returns:
+      The requested object type
+    """
+    logger.info(f"{pop_stack()} - STARTED".center(100, "-"))
+    logger.debug(f"{pop_stack()} - generating {conversiontype.value}".center(100, "-"))
+
+    if conversiontype in [ConversionType.JOIN, ConversionType.WHERE]:
+        if not input_dict and not input_list:
+            raise ValueError(
+                f"A list input must be provided for conversion to {conversiontype.value}"
+            )
+        input = input_list if input_list else input_dict
+    elif conversiontype in [ConversionType.ANALYTIC, ConversionType.DELTA]:
+        if not input_dict:
+            raise ValueError(
+                f"A dictionary input must be provided for conversion to {conversiontype.value}"
+            )
+        input = input_dict
+
+    if conversiontype == ConversionType.ANALYTIC:
+        obj = Analytic(
+            [
+                Field(
+                    name=field.get("name"),
+                    source_column=field.get("source_column"),
+                    source_name=field.get("source_name"),
+                    transformation=field.get("transformation"),
+                    pk=field.get("pk"),
+                    hk=field.get("hk"),
+                )
+                for field in input["partition"]
+            ],
+            [
+                Field(
+                    name=field.get("name"),
+                    source_column=field.get("source_column"),
+                    source_name=field.get("source_name"),
+                    transformation=field.get("transformation"),
+                    pk=field.get("pk"),
+                    hk=field.get("hk"),
+                )
+                for field in input["driving_column"]
+            ],
+            [
+                Field(
+                    name=field.get("name"),
+                    source_column=field.get("source_column"),
+                    source_name=field.get("source_name"),
+                    transformation=field.get("transformation"),
+                    pk=field.get("pk"),
+                    hk=field.get("hk"),
+                )
+                for field in input["order"]
+            ],
+        )
+
+    elif conversiontype == ConversionType.DELTA:
+        field = input.get("field", {})
+        obj = Delta(
+            Field(
+                name=field.get("name"),
+                source_column=field.get("source_column"),
+                source_name=field.get("source_name"),
+                transformation=field.get("transformation"),
+                pk=field.get("pk"),
+                hk=field.get("hk"),
+            ),
+            input.get("lower_bound"),
+            upper_bound=input.get("upper_bound"),
+        )
+
+    elif conversiontype == ConversionType.JOIN:
+        obj = [
+            Join(
+                j.get("right"),
+                [
+                    Condition(
+                        [
+                            Field(
+                                name=field.get("name"),
+                                source_column=field.get("source_column"),
+                                source_name=field.get("source_name"),
+                                transformation=field.get("transformation"),
+                                pk=field.get("pk"),
+                                hk=field.get("hk"),
+                            )
+                            for field in c.get("fields", [])
+                        ],
+                        operator=Operator(c.get("operator", "=")),
+                        condition=LogicOperator(c.get("condition", "and").lower()),
+                    )
+                    for c in j.get("on", [])
+                ],
+                j.get("left"),
+                JoinType(j.get("type", "left").lower()),
+            )
+            for j in input
+        ]
+    elif conversiontype == ConversionType.WHERE:
+        obj = [
+            Condition(
+                [
+                    Field(
+                        name=field.get("name"),
+                        source_column=field.get("source_column"),
+                        source_name=field.get("source_name"),
+                        transformation=field.get("transformation"),
+                        pk=field.get("pk"),
+                        hk=field.get("hk"),
+                    )
+                    for field in c.get("fields", [])
+                ],
+                operator=Operator(c.get("operator", "=")),
+                condition=LogicOperator(c.get("condition", "and").lower()),
+            )
+            for c in input
+        ]
+
+    logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100, "-"))
+    return obj

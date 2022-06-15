@@ -191,13 +191,13 @@ def create_data_check_tasks(logger: ILogger, task: Task, properties: dict) -> li
 
     if "source_to_target" in task.parameters.keys():
         table_keys = [
-            field.name
+            field["name"]
             for field in task.parameters["source_to_target"]
             if "pk" in field.keys()
         ]
 
         history_keys = [
-            field.name
+            field["name"]
             for field in task.parameters["source_to_target"]
             if "hk" in field.keys()
         ]
