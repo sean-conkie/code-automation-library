@@ -1,10 +1,11 @@
 import re
 
 from enum import Enum
-from lib.logger import ILogger, pop_stack
 from typing import Union
 from unittest.util import strclass
 from warnings import warn
+
+from lib.helper import ifnull, isnullorwhitespace
 
 __all__ = [
     "Condition",
@@ -264,8 +265,33 @@ class Field(object):
     @property
     def name(self) -> str:
         """
-        Returns the name
+        If the name is null or whitespace, then if the source column is null or whitespace and the
+        transformation is not null or whitespace, then if the transformation contains a cast column and
+        cast type, then return the cast column and cast type, else if the transformation contains a
+        decode, then return the decode, else if the transformation contains a function, then return the
+        function, else return the source column, else return the name
+
+        Returns:
+          The name of the column
         """
+        if isnullorwhitespace(self._name):
+            if isnullorwhitespace(self._source_column) and not isnullorwhitespace(
+                self._transformation
+            ):
+                regex = r"(?:(?P<function>\b\w+\b)?\()?(?:(?P<cast_col>\w+) as (?P<cast_type>\w+))?(?P<decode>case)?"
+                m = re.search(regex, self._transformation, re.IGNORECASE)
+                if m:
+                    if not isnullorwhitespace(
+                        m.group("cast_col")
+                    ) and not isnullorwhitespace(m.group("cast_type")):
+                        return f"{m.group('cast_col')}_{m.group('cast_type')}"
+                    elif not isnullorwhitespace(m.group("decode")):
+                        return m.group("decode")
+                    elif not isnullorwhitespace(m.group("function")):
+                        return m.group("function")
+            else:
+                return self._source_column
+
         return self._name
 
     @name.setter
@@ -278,8 +304,17 @@ class Field(object):
     @property
     def source_column(self) -> str:
         """
-        Returns the source_column
+        If the source column is null or whitespace, and the transformation is null or whitespace, then
+        return the name of the column
+
+        Returns:
+          The source column name.
         """
+        if isnullorwhitespace(self._source_column) and isnullorwhitespace(
+            self._transformation
+        ):
+            return self._name
+
         return self._source_column
 
     @source_column.setter
@@ -320,8 +355,14 @@ class Field(object):
     @property
     def pk(self) -> bool:
         """
-        Returns the pk
+        If the value of the private variable `_pk` is null or whitespace, return false, otherwise return
+        true
+
+        Returns:
+          The value of the private variable _pk.
         """
+        if isnullorwhitespace(self._pk):
+            return False
         return self._pk
 
     @pk.setter
@@ -334,8 +375,14 @@ class Field(object):
     @property
     def hk(self) -> bool:
         """
-        Returns the hk
+        If the value of the private variable _hk is null or whitespace, return False, otherwise return
+        the value of the private variable _hk
+
+        Returns:
+          The value of the _hk property.
         """
+        if isnullorwhitespace(self._hk):
+            return False
         return self._hk
 
     @hk.setter
@@ -344,6 +391,19 @@ class Field(object):
         Sets the hk
         """
         self._hk = value
+
+    def source(self, default_source_name: str = None) -> str:
+
+        if isnullorwhitespace(self._transformation):
+            if isnullorwhitespace(self._source_name) and isnullorwhitespace(
+                default_source_name
+            ):
+                return self.source_column
+            return (
+                f"{ifnull(self._source_name, default_source_name)}.{self.source_column}"
+            )
+        else:
+            return self._transformation
 
 
 class Task(object):
@@ -856,6 +916,7 @@ class SQLTask(Task):
         parameters: SQLParameter,
         dependencies: list[str] = [],
     ) -> None:
+        super().__init__()
         self._task_id = task_id
         self._operator = operator
         self._parameters = parameters
@@ -994,6 +1055,7 @@ class SQLDataCheckTask(Task):
         parameters: SQLDataCheckParameter,
         dependencies: list[str] = [],
     ) -> None:
+        super().__init__()
         self._task_id = task_id
         self._operator = operator
         self._parameters = parameters
