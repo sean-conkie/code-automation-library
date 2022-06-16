@@ -23,6 +23,7 @@ __all__ = [
     "SQLDataCheckParameter",
     "todict",
     "converttoobj",
+    "TableType",
 ]
 
 
@@ -355,13 +356,12 @@ class Field(object):
     @property
     def pk(self) -> bool:
         """
-        If the value of the private variable `_pk` is null or whitespace, return false, otherwise return
-        true
+        It returns a boolean value.
 
         Returns:
-          The value of the private variable _pk.
+          The value of the _pk attribute.
         """
-        if isnullorwhitespace(self._pk):
+        if self._pk is None:
             return False
         return self._pk
 
@@ -375,13 +375,12 @@ class Field(object):
     @property
     def hk(self) -> bool:
         """
-        If the value of the private variable _hk is null or whitespace, return False, otherwise return
-        the value of the private variable _hk
+        It returns a boolean value.
 
         Returns:
-          The value of the _hk property.
+          The value of the attribute _hk.
         """
-        if isnullorwhitespace(self._hk):
+        if self._hk is None:
             return False
         return self._hk
 
@@ -748,7 +747,7 @@ class SQLParameter(object):
         driving_table: str,
         source_to_target: list[Field],
         write_disposition: WriteDisposition,
-        sql: str,
+        sql: str = None,
         joins: list[Join] = None,
         where: list[Condition] = None,
         delta: Delta = None,
@@ -916,11 +915,7 @@ class SQLTask(Task):
         parameters: SQLParameter,
         dependencies: list[str] = [],
     ) -> None:
-        super().__init__()
-        self._task_id = task_id
-        self._operator = operator
-        self._parameters = parameters
-        self._dependencies = dependencies
+        super().__init__(task_id, operator, parameters, dependencies)
 
     @property
     def operator(self) -> TaskOperator:
@@ -949,6 +944,29 @@ class SQLTask(Task):
         Sets the parameters
         """
         self._parameters = value
+
+    @property
+    def history_keys(self) -> list[str]:
+        """
+        > This function returns a list of strings that are the names of the fields that are history keys
+
+        Returns:
+          A list of strings.
+        """
+
+        return [field.name for field in self.parameters.source_to_target if field.hk]
+
+    @property
+    def primary_keys(self) -> list[str]:
+        """
+        It returns a list of strings, where each string is the name of a field in the source table that
+        is a primary key.
+
+        Returns:
+          A list of strings.
+        """
+
+        return [field.name for field in self.parameters.source_to_target if field.pk]
 
     def __createfieldlist(self, fields: list[Field]) -> str:
         """
@@ -1055,11 +1073,7 @@ class SQLDataCheckTask(Task):
         parameters: SQLDataCheckParameter,
         dependencies: list[str] = [],
     ) -> None:
-        super().__init__()
-        self._task_id = task_id
-        self._operator = operator
-        self._parameters = parameters
-        self._dependencies = dependencies
+        super().__init__(task_id, operator, parameters, dependencies)
 
     @property
     def operator(self) -> TaskOperator:

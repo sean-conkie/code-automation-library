@@ -1,6 +1,3 @@
-from operator import truediv
-
-
 _all_ = ["isnullorwhitespace"]
 
 
@@ -15,7 +12,7 @@ def isnullorwhitespace(string: str) -> bool:
     Returns:
       A boolean value.
     """
-    if string == None:
+    if string is None:
         return True
 
     if not type(string) == str:
@@ -26,18 +23,19 @@ def isnullorwhitespace(string: str) -> bool:
 
     return False
 
+
 def isnullorempty(string: str) -> bool:
     """
     > If the string is null, return false. If the string is not a string, raise an error. If the string
     is empty or only whitespace, return true. Otherwise, return false
-    
+
     Args:
       string (str): The string to check.
-    
+
     Returns:
       A boolean value.
     """
-    if string == None:
+    if string is None:
         return False
 
     if not type(string) == str:
@@ -47,6 +45,7 @@ def isnullorempty(string: str) -> bool:
         return True
 
     return False
+
 
 def ifnull(string: str, default: str) -> str:
     """
