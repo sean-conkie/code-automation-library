@@ -135,7 +135,9 @@ def builddags(logger: ILogger, output_directory: str, config: dict) -> int:
         dependencies.append(f"{task} >> finish_pipeline")
 
     properties = [
-        f"{key} = '{config['properties'][key]}'" for key in config["properties"].keys()
+        f"{key} = '{config['properties'][key]}'"
+        for key in config["properties"].keys()
+        if key not in ["tags", "args", "imports"]
     ]
 
     logger.info(f"populating template")
@@ -180,21 +182,17 @@ def create_data_check_tasks(logger: ILogger, task: Task, properties: dict) -> li
     logger.info(f"{pop_stack()} STARTED".center(100, "-"))
     data_check_tasks = []
 
-    if "source_to_target" in task.parameters.keys():
-        table_keys = [
-            field["name"]
-            for field in task.parameters["source_to_target"]
-            if "pk" in field.keys()
-        ]
+    table_keys = [
+        field["name"]
+        for field in task.parameters.get("source_to_target", [])
+        if "pk" in field.keys()
+    ]
 
-        history_keys = [
-            field["name"]
-            for field in task.parameters["source_to_target"]
-            if "hk" in field.keys()
-        ]
-    else:
-        table_keys = []
-        history_keys = []
+    history_keys = [
+        field["name"]
+        for field in task.parameters.get("source_to_target", [])
+        if "hk" in field.keys()
+    ]
 
     logger.info(f"creating row count check")
     dataset = (
@@ -236,12 +234,6 @@ def create_data_check_tasks(logger: ILogger, task: Task, properties: dict) -> li
     # fields specified in config.
     if len(table_keys) > 0 and task.parameters["target_type"] == TableType.HISTORY.name:
         logger.info(f"creating duplicate active history data check")
-        dates = [
-            "effective_from_dt",
-            "effective_from_dt_csn_seq",
-            "effective_from_dt_seq",
-            "effective_to_dt",
-        ]
         dupe_check_task = SQLDataCheckTask(
             f"{task.parameters['destination_table']}_data_check_open_history_items",
             TaskOperator.DATACHECK,

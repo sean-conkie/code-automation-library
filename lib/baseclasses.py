@@ -1127,7 +1127,7 @@ def todict(obj, classkey=None):
     elif hasattr(obj, "__iter__") and not isinstance(obj, str):
         return [todict(v, classkey) for v in obj]
     elif issubclass(type(obj), Enum):
-        return obj.value
+        return obj.name
     elif hasattr(obj, "__dict__"):
         data = dict(
             [
