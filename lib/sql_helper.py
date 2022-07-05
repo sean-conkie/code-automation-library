@@ -93,12 +93,12 @@ def create_sql(logger: ILogger, task: Task, dataset_staging: str = None) -> str:
 
     params = SQLParameter(
         task.parameters.get("destination_table"),
-        TableType(task.parameters.get("target_type")),
+        TableType[task.parameters.get("target_type")],
         task.parameters.get("driving_table"),
         converttoobj(task.parameters.get("source_to_target"), ConversionType.SOURCE),
-        WriteDisposition(
+        WriteDisposition[
             task.parameters.get("write_disposition", "WRITE_TRUNCATE").upper()
-        ),
+        ],
         task.parameters.get("sql"),
         converttoobj(task.parameters.get("joins"), ConversionType.JOIN),
         converttoobj(task.parameters.get("where"), ConversionType.WHERE),
@@ -111,7 +111,7 @@ def create_sql(logger: ILogger, task: Task, dataset_staging: str = None) -> str:
 
     sqltask = SQLTask(
         copy.copy(task.task_id),
-        TaskOperator(task.operator),
+        TaskOperator[task.operator],
         params,
         copy.deepcopy(task.dependencies),
     )
@@ -911,7 +911,7 @@ def create_sql_select(logger: ILogger, task: SQLTask, tables: dict) -> str:
     # and target column.
     for i, column in enumerate(task.parameters.source_to_target):
         prefix = "select " if i == 0 else "       "
-        
+
         source = column.source(task.parameters.driving_table)
         for key in tables.keys():
             source = source.replace(key, tables[key])

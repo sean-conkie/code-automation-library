@@ -2,180 +2,162 @@ import argparse
 import black
 import os
 import pathlib
-import re
-import sys
-import traceback
 
 from lib.baseclasses import (
+    TableType,
     TaskOperator,
     Task,
     SQLDataCheckTask,
     SQLDataCheckParameter,
     todict,
 )
-from datetime import datetime
+
 from jinja2 import Environment, FileSystemLoader
-from lib.jsonhelper import get_json
 from lib.logger import ILogger, pop_stack
 from lib.sql_helper import create_sql_file
 from shutil import copy
 
+__all__ = [
+    "builddags",
+]
 
-def main(logger: ILogger, args: argparse.Namespace) -> int:
-    """Main method for generating .py files containing DAGs from config files.
 
-    From JSON config file(s) supplied as a dir or file, generate a .py file
-    using template_dag.txt.  Loops through all configs provided and creates
-    one .py file per config.
+def builddags(logger: ILogger, output_directory: str, config: dict) -> int:
+    """
+    > The function takes a JSON file as input, and creates a DAG file as output
 
-    args:
-        args: A dictionary of input parameters, defaults to empty dictionary.
-              Dictionary can contain one or more key value paris of;
-                --dir: source file path or directory containing config files
-                --out-dir: target output file path for .py files to be saved
+    Args:
+      logger (ILogger): ILogger - this is the logger object that is used to log messages to the console
+    and to the log file.
+      args (argparse.Namespace): argparse.Namespace
+      config (dict): The configuration file that contains the DAG definition.
 
-    returns:
-        Saves .py files in output directory and returns;
-            0: succesful
-            1: failure
+    Returns:
+      The return value is the exit code of the function.
     """
 
     logger.info(f"dag files - {pop_stack()} STARTED".center(100, "-"))
 
-    dpath = args.config_directory
-    opath = args.output_directory
-    config_list = []
-
-    # create a list of config files using the source directory (dpath), if the
-    # path provided is a file add id otherwise append each filename in directory
-    logger.info(f"creating config list")
-    if not os.path.isdir(dpath) and os.path.exists(dpath):
-        config_list.append(dpath)
-    else:
-        for filename in os.listdir(dpath):
-            logger.debug(f"filename: {filename}")
-            m = re.search(r"^cfg_.*\.json$", filename, re.IGNORECASE)
-            if m:
-                config_list.append(filename)
-
-    # for each config file identified use the content of the JSON to create
+    # for config file provided use the content of the JSON to create
     # the python statements needed to be inserted into the template
-    for config in config_list:
-        path = config if os.path.exists(config) else f"{dpath}{config}"
-        cfg = get_json(logger, path)
-        logger.info(f"building dag - {cfg['name']}")
+    logger.info(f"building dag - {config['name']}")
 
-        dag_string = create_dag_string(logger, cfg["name"], cfg["dag"])
-        default_args = create_dag_args(logger, cfg["args"])
-        imports = "\n".join(cfg["imports"])
-        tasks = []
-        dependencies = []
+    dag_string = create_dag_string(
+        logger,
+        config.get("name"),
+        {
+            "description": config.get("description"),
+            "tags": config.get("properties", {}).get("tags"),
+        },
+    )
+    default_args = create_dag_args(logger, config.get("properties", {}).get("args"))
+    imports = "\n".join(config.get("properties", {}).get("imports"))
+    tasks = []
+    dependencies = []
 
-        # for each item in the task array, check the operator type and use this
-        # to determine the task parameters to be used
-        for t in cfg["tasks"]:
-            task = Task(
-                t.get("task_id"),
-                t.get("operator"),
-                t.get("parameters"),
-                t.get("dependencies"),
-            )
-            logger.info(f'creating task "{task.task_id}" - {pop_stack()}')
-            if task.operator == TaskOperator.CREATETABLE.value:
-                # for each task, add a new one to cfg["tasks"] with data check tasks.
-                if (
-                    "block_data_check" not in task.parameters.keys()
-                    or not task.parameters["block_data_check"]
-                ):
-                    data_check_tasks = create_data_check_tasks(
-                        logger, task, cfg["properties"]
-                    )
-                    for d in data_check_tasks:
-                        if not d in cfg["tasks"]:
-                            cfg["tasks"].append(d)
-
-                task.parameters = create_table_task(logger, task, cfg["properties"])
-                task.operator = TaskOperator.BQOPERATOR.value
-
-            elif task.operator == "TruncateTable":
-                task.parameters = create_table_task(logger, task, cfg["properties"])
-                task.operator = TaskOperator.BQOPERATOR.value
-
-            elif task.operator == "DataCheck":
-                task.operator = TaskOperator.BQCHEK.value
-
-            elif task.operator == TaskOperator.LOADFROMGCS.value:
-                task.parameters = create_gcs_load_task(logger, task, cfg["properties"])
-                task.operator = TaskOperator.GCSTOBQ.value
-
-            tasks.append(create_task(logger, task))
-
-            if len(task.dependencies) > 0:
-                # for each entry in the dependencies array, add the item as a dependency.
-                # where the dependency is on an external task, create an external task if
-                # no task already exists
-                for dep in task.dependencies:
-                    dep_list = dep.split(".")
-                    if len(dep_list) > 1:
-                        dep_task = f"ext_{dep_list[1]}"
-                        if not dep_task in [t.split(" ")[0].strip() for t in tasks]:
-                            ext_task = Task(
-                                f"{dep_task}",
-                                "ExternalTaskSensor",
-                                {
-                                    "external_dag_id": dep_list[0],
-                                    "external_task_id": dep_list[1],
-                                    "check_existence": True,
-                                    "timeout": 600,
-                                    "allowed_states": ["success"],
-                                    "failed_states": ["failed", "skipped"],
-                                    "mode": "reschedule",
-                                },
-                            )
-                            tasks.append(create_task(logger, ext_task))
-                            dependencies.append(f"start_pipeline >> {dep_task}")
-                    else:
-                        dep_task = dep
-                    dependencies.append(f"{dep_task} >> {task.task_id}")
-            else:
-                dependencies.append(f"start_pipeline >> {task.task_id}")
-
-        dep_tasks = [d[0].strip() for d in [dep.split(">") for dep in dependencies]]
-        final_tasks = [
-            task.get("task_id")
-            for task in cfg["tasks"]
-            if not task.get("task_id") in dep_tasks
-        ]
-
-        for task in final_tasks:
-            dependencies.append(f"{task} >> finish_pipeline")
-
-        properties = [
-            f"{key} = '{cfg['properties'][key]}'" for key in cfg["properties"].keys()
-        ]
-
-        logger.info(f"populating template")
-        file_loader = FileSystemLoader("./templates")
-        env = Environment(loader=file_loader)
-
-        template = env.get_template("template_dag.txt")
-        output = template.render(
-            imports=imports,
-            tasks=tasks,
-            default_args=default_args,
-            dag_string=dag_string,
-            dependencies=dependencies,
-            properties=properties,
+    # for each item in the task array, check the operator type and use this
+    # to determine the task parameters to be used
+    for t in config["tasks"]:
+        task = Task(
+            t.get("task_id"),
+            t.get("operator"),
+            t.get("parameters"),
+            t.get("dependencies"),
         )
+        logger.info(f'creating task "{task.task_id}" - {pop_stack()}')
+        if task.operator == TaskOperator.CREATETABLE.name:
+            # for each task, add a new one to config["tasks"] with data check tasks.
+            if (
+                "block_data_check" not in task.parameters.keys()
+                or not task.parameters["block_data_check"]
+            ):
+                data_check_tasks = create_data_check_tasks(
+                    logger, task, config["properties"]
+                )
+                for d in data_check_tasks:
+                    if not d in config["tasks"]:
+                        config["tasks"].append(d)
 
-        # reformat dag files to pass linting
-        reformatted = black.format_file_contents(
-            output, fast=False, mode=black.FileMode()
-        )
+            task.parameters = create_table_task(logger, task, config["properties"])
+            task.operator = TaskOperator.BQOPERATOR.value
 
-        dag_file = f"{opath}{cfg['name']}.py"
-        with open(dag_file, "w") as outfile:
-            outfile.write(reformatted)
+        elif task.operator == "TruncateTable":
+            task.parameters = create_table_task(logger, task, config["properties"])
+            task.operator = TaskOperator.BQOPERATOR.value
+
+        elif task.operator == "DataCheck":
+            task.operator = TaskOperator.BQCHEK.value
+
+        elif task.operator == TaskOperator.LOADFROMGCS.value:
+            task.parameters = create_gcs_load_task(logger, task, config["properties"])
+            task.operator = TaskOperator.GCSTOBQ.value
+
+        tasks.append(create_task(logger, task))
+
+        if len(task.dependencies) > 0:
+            # for each entry in the dependencies array, add the item as a dependency.
+            # where the dependency is on an external task, create an external task if
+            # no task already exists
+            for dep in task.dependencies:
+                dep_list = dep.split(".")
+                if len(dep_list) > 1:
+                    dep_task = f"ext_{dep_list[1]}"
+                    if not dep_task in [t.split(" ")[0].strip() for t in tasks]:
+                        ext_task = Task(
+                            f"{dep_task}",
+                            "ExternalTaskSensor",
+                            {
+                                "external_dag_id": dep_list[0],
+                                "external_task_id": dep_list[1],
+                                "check_existence": True,
+                                "timeout": 600,
+                                "allowed_states": ["success"],
+                                "failed_states": ["failed", "skipped"],
+                                "mode": "reschedule",
+                            },
+                        )
+                        tasks.append(create_task(logger, ext_task))
+                        dependencies.append(f"start_pipeline >> {dep_task}")
+                else:
+                    dep_task = dep
+                dependencies.append(f"{dep_task} >> {task.task_id}")
+        else:
+            dependencies.append(f"start_pipeline >> {task.task_id}")
+
+    dep_tasks = [d[0].strip() for d in [dep.split(">") for dep in dependencies]]
+    final_tasks = [
+        task.get("task_id")
+        for task in config["tasks"]
+        if not task.get("task_id") in dep_tasks
+    ]
+
+    for task in final_tasks:
+        dependencies.append(f"{task} >> finish_pipeline")
+
+    properties = [
+        f"{key} = '{config['properties'][key]}'" for key in config["properties"].keys()
+    ]
+
+    logger.info(f"populating template")
+    file_loader = FileSystemLoader("./templates")
+    env = Environment(loader=file_loader)
+
+    template = env.get_template("template_dag.txt")
+    output = template.render(
+        imports=imports,
+        tasks=tasks,
+        default_args=default_args,
+        dag_string=dag_string.replace("'", '"'),
+        dependencies=dependencies,
+        properties=properties,
+    )
+
+    # reformat dag files to pass linting
+    reformatted = black.format_file_contents(output, fast=False, mode=black.FileMode())
+
+    dag_file = f"{output_directory}{config['name']}.py"
+    with open(dag_file, "w") as outfile:
+        outfile.write(reformatted)
 
     logger.info(f"dag files {pop_stack()} COMPLETED SUCCESSFULLY".center(100, "-"))
     return 0
@@ -250,7 +232,7 @@ def create_data_check_tasks(logger: ILogger, task: Task, properties: dict) -> li
 
     # create task to check for multiple open records - if primary key
     # fields specified in config.
-    if len(table_keys) > 0 and task.parameters["target_type"] == 2:
+    if len(table_keys) > 0 and task.parameters["target_type"] == TableType.HISTORY.name:
         logger.info(f"creating duplicate active history data check")
         dates = [
             "effective_from_dt",
@@ -599,49 +581,3 @@ def create_dag_args(logger: ILogger, args: dict) -> str:
 
     logger.info(f"{pop_stack()} COMPLETED SUCCESSFULLY".center(100, "-"))
     return outp
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--config_directory",
-        required=False,
-        dest="config_directory",
-        default="./cfg/dag/",
-        help="Specify the location of the config file(s) which define the required DAGs. (default: ./cfg)",
-    )
-    parser.add_argument(
-        "--destination",
-        required=False,
-        dest="output_directory",
-        default="./dags/",
-        help="Specify the desired output directory for DAGs created. (default: ./dags)",
-    )
-    parser.add_argument(
-        "--sql_destination",
-        required=False,
-        dest="sql_output_directory",
-        default="./dags/sql/",
-        help="Specify the desired output directory for DAGs created. (default: ./dags)",
-    )
-    parser.add_argument(
-        "--log_level",
-        required=False,
-        dest="level",
-        default="DEBUG",
-        help="Specify the desired log level (default: DEBUG).  This can be one of the following: 'CRITICAL', 'DEBUG', 'ERROR', 'FATAL','INFO','NOTSET', 'WARNING'",
-    )
-
-    known_args, args = parser.parse_known_args()
-
-    log_file_name = os.path.normpath(
-        f'./logs/builddags_{datetime.now().strftime("%Y-%m-%dT%H%M%S")}.log'
-    )
-    logger = ILogger("builddags", log_file_name, known_args.level)
-
-    try:
-        main(logger, known_args)
-    except:
-        logger.error(f"{traceback.format_exc():}")
-        logger.debug(f"{sys.exc_info()[1]:}")
-        logger.info(f"dag files - {pop_stack()} FAILED".center(100, "-"))

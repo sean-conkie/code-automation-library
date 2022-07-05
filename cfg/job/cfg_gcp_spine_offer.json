@@ -1,0 +1,165 @@
+{
+  "name": "GCP_SPINE_OFFER",
+  "description": "Populates portfolio offer tables uk_pub_customer_spine_offer_is",
+  "type": "DAG",
+  "properties": {
+    "tags": [
+      "offer",
+      "customer"
+    ],
+    "args": {
+      "owner": "customerbtprod",
+      "email": [
+        "sean.conkie@sky.uk"
+      ]
+    },
+    "dataset_source": "uk_arc_chordiant_is",
+    "dataset_staging": "uk_pre_customer_spine_offer_is",
+    "dataset_publish": "uk_pub_customer_spine_offer_is",
+    "gs_source_bucket": "uk_customer_tds_is",
+    "imports": []
+  },
+  "tasks": [
+    {
+      "task_id": "dim_offer_type",
+      "operator": "CREATETABLE",
+      "parameters": {
+        "key": "value",
+        "source_to_target": [
+          {
+            "name": "id",
+            "source_column": "id",
+            "source_name": "uk_tds_refdata_eod_is.cc_refdata_bsboffertooffertype",
+            "transformation": "",
+            "pk": true,
+            "hk": false
+          },
+          {
+            "name": "offer_detail_id",
+            "source_column": "offerid",
+            "source_name": "uk_tds_refdata_eod_is.cc_refdata_bsboffertooffertype",
+            "transformation": "",
+            "pk": false,
+            "hk": false
+          },
+          {
+            "name": "offer_type_id",
+            "source_column": "offertypeid",
+            "source_name": "uk_tds_refdata_eod_is.cc_refdata_bsboffertooffertype",
+            "transformation": "",
+            "pk": false,
+            "hk": false
+          },
+          {
+            "name": "created_by_id",
+            "source_column": "createdby",
+            "source_name": "uk_tds_refdata_eod_is.cc_refdata_bsboffertooffertype",
+            "transformation": "",
+            "pk": false,
+            "hk": false
+          },
+          {
+            "name": "created_dt",
+            "source_column": "created",
+            "source_name": "uk_tds_refdata_eod_is.cc_refdata_bsboffertooffertype",
+            "transformation": "",
+            "pk": false,
+            "hk": false
+          },
+          {
+            "name": "last_modified_dt",
+            "source_column": "lastupate",
+            "source_name": "uk_tds_refdata_eod_is.cc_refdata_bsboffertooffertype",
+            "transformation": "",
+            "pk": false,
+            "hk": false
+          },
+          {
+            "name": "last_modified_by_id",
+            "source_column": "updatedby",
+            "source_name": "uk_tds_refdata_eod_is.cc_refdata_bsboffertooffertype",
+            "transformation": "",
+            "pk": false,
+            "hk": false
+          },
+          {
+            "name": "code",
+            "source_column": "code",
+            "source_name": "uk_tds_refdata_eod_is.cc_refdata_bsboffertype",
+            "transformation": "",
+            "pk": false,
+            "hk": false
+          },
+          {
+            "name": "description",
+            "source_column": "description",
+            "source_name": "uk_tds_refdata_eod_is.cc_refdata_bsboffertype",
+            "transformation": "",
+            "pk": false,
+            "hk": false
+          }
+        ],
+        "where": [
+          {
+            "logic_operator": "AND",
+            "operator": "!=",
+            "fields": [
+              "uk_tds_refdata_eod_is.cc_refdata_bsboffertooffertype.rdmaction",
+              "'D'"
+            ]
+          }
+        ],
+        "joins": [
+          {
+            "left": "uk_tds_refdata_eod_is.cc_refdata_bsboffertooffertype",
+            "right": "uk_tds_refdata_eod_is.cc_refdata_bsboffertype",
+            "type": "LEFT",
+            "on": [
+              {
+                "logic_operator": "AND",
+                "operator": "=",
+                "fields": [
+                  "uk_tds_refdata_eod_is.cc_refdata_bsboffertooffertype.offertypeid",
+                  "uk_tds_refdata_eod_is.cc_refdata_bsboffertype.id"
+                ]
+              },
+              {
+                "logic_operator": "AND",
+                "operator": "!=",
+                "fields": [
+                  "uk_tds_refdata_eod_is.cc_refdata_bsboffertype.rdmaction",
+                  "'D'"
+                ]
+              }
+            ]
+          }
+        ],
+        "destination_table": "dim_offer_type",
+        "destination_dataset": "uk_pub_customer_spine_offer_is",
+        "write_disposition": "WRITETRUNCATE",
+        "driving_table": "uk_tds_refdata_eod_is.cc_refdata_bsboffertooffertype",
+        "staging_dataset": "uk_pre_customer_spine_offer_is",
+        "target_type": "TYPE1"
+      },
+      "description": "Populates portfolio offer tables uk_pub_customer_spine_offer_is",
+      "dependencies": []
+    },
+    {
+      "task_id": "load_offer_type",
+      "operator": "LOADFROMGCS",
+      "parameters": {
+        "source_to_target": [],
+        "where": [],
+        "joins": [],
+        "destination_table": "offer_table",
+        "destination_dataset": "uk_pub_customer_spine_offer_is",
+        "write_disposition": "WRITETRUNCATE",
+        "driving_table": "source_table",
+        "staging_dataset": "source_dataset",
+        "table_type": "TYPE1"
+      },
+      "description": "Populates portfolio offer tables uk_pub_customer_spine_offer_is",
+      "dependencies": []
+    }
+  ]
+}

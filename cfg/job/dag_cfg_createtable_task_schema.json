@@ -287,7 +287,118 @@
               "title": "The variance in seconds to be applied to the lower_bound (1 day = 86400 seconds), use 0 for high date."
             }
           }
+        },
+        "history": {
+          "type": "object",
+          "default": {},
+          "title": "Defines fields used to generate a history table",
+          "required": [
+            "partition",
+            "driving_column",
+            "order"
+          ],
+          "properties": {
+            "partition": {
+              "type": "array",
+              "default": [],
+              "title": "The partition to be used",
+              "items": {
+                "type": "object",
+                "default": {},
+                "title": "A field in the partition",
+                "required": [
+                  "source_column"
+                ],
+                "properties": {
+                  "source_column": {
+                    "type": "string",
+                    "default": "",
+                    "title": "The source column"
+                  },
+                  "source_name": {
+                    "type": "string",
+                    "default": "",
+                    "title": "(Optional) The source table name, defaults to driving table."
+                  }
+                }
+              }
+            },
+            "driving_column": {
+              "type": "array",
+              "default": [],
+              "title": "(Optional) The column to be part of the lag/lead",
+              "items": {
+                "type": "object",
+                "title": "A column",
+                "required": [
+                  "name",
+                  "source_column"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "title": "The target name of the analycit result"
+                  },
+                  "source_column": {
+                    "type": "string",
+                    "title": "The source column"
+                  },
+                  "source_name": {
+                    "type": "string",
+                    "title": "(Optional) The source table name, driving table used as default"
+                  },
+                  "transformation": {
+                    "type": "string",
+                    "title": "(Conditional - source_column OR transformation) Defines the transformation of the column, not including joins.",
+                    "examples": [
+                      "current_timestamp()",
+                      "ifnull(uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer.statuschangeddate,uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer.effective_from_dt)",
+                      "abs(uk_tds_chordiant_eod_is.cc_chordiant_bsbpriceableunit.quotedprice)"
+                    ]
+                  }
+                }
+              }
+            },
+            "order": {
+              "type": "array",
+              "default": [],
+              "title": "The order by for the analytic",
+              "items": {
+                "type": "object",
+                "title": "A column - can be a column or transformation",
+                "properties": {
+                  "transformation": {
+                    "type": "string",
+                    "default": "",
+                    "title": "(Optional) A transformation for use in the order by, fully qualify any table statements.",
+                    "examples": [
+                      "ifnull(uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer.statuschangeddate,uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer.effective_from_dt)"
+                    ]
+                  },
+                  "source_column": {
+                    "type": "string",
+                    "title": "(Optional) The source column"
+                  },
+                  "source_name": {
+                    "type": "string",
+                    "title": "(Optional) The source table name, driving table used as default"
+                  }
+                },
+                "examples": [{
+                    "transformation": "ifnull(uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer.statuschangeddate,uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer.effective_from_dt)"
+                  },
+                  {
+                    "source_column": "effective_from_dt_csn_seq"
+                  },
+                  {
+                    "source_column": "effective_from_dt_seq"
+                  }
+                ]
+              }
+            }
+          }
         }
+
       },
       "write_disposition": {
         "type": "string",
@@ -303,107 +414,6 @@
         "examples": [
           "uk_pre_customer_spine_offer_is"
         ]
-      },
-      "history": {
-        "type": "object",
-        "default": {},
-        "title": "Defines fields used to generate a history table",
-        "required": [
-          "partition",
-          "driving_column",
-          "order"
-        ],
-        "properties": {
-          "partition": {
-            "type": "array",
-            "default": [],
-            "title": "The partition to be used",
-            "items": {
-              "type": "object",
-              "default": {},
-              "title": "A field in the partition",
-              "required": [
-                "source_column"
-              ],
-              "properties": {
-                "source_column": {
-                  "type": "string",
-                  "default": "",
-                  "title": "The source column"
-                },
-                "source_name": {
-                  "type": "string",
-                  "default": "",
-                  "title": "(Optional) The source table name, defaults to driving table."
-                }
-              }
-            }
-          },
-          "driving_column": {
-            "type": "array",
-            "default": [],
-            "title": "(Optional) The column to be part of the lag/lead",
-            "items": {
-              "type": "object",
-              "title": "A column",
-              "required": [
-                "name",
-                "source_column"
-              ],
-              "properties": {
-                "name": {
-                  "type": "string",
-                  "title": "The target name of the analycit result"
-                },
-                "source_column": {
-                  "type": "string",
-                  "title": "The source column"
-                },
-                "source_name": {
-                  "type": "string",
-                  "title": "(Optional) The source table name, driving table used as default"
-                }
-              }
-            }
-          },
-          "order": {
-            "type": "array",
-            "default": [],
-            "title": "The order by for the analytic",
-            "items": {
-              "type": "object",
-              "title": "A column - can be a column or transformation",
-              "properties": {
-                "transformation": {
-                  "type": "string",
-                  "default": "",
-                  "title": "(Optional) A transformation for use in the order by, fully qualify any table statements.",
-                  "examples": [
-                    "ifnull(uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer.statuschangeddate,uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer.effective_from_dt)"
-                  ]
-                },
-                "source_column": {
-                  "type": "string",
-                  "title": "(Optional) The source column"
-                },
-                "source_name": {
-                  "type": "string",
-                  "title": "(Optional) The source table name, driving table used as default"
-                }
-              },
-              "examples": [{
-                  "transformation": "ifnull(uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer.statuschangeddate,uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer.effective_from_dt)"
-                },
-                {
-                  "source_column": "effective_from_dt_csn_seq"
-                },
-                {
-                  "source_column": "effective_from_dt_seq"
-                }
-              ]
-            }
-          }
-        }
       },
       "sql": {
         "type": "string",
