@@ -3,10 +3,7 @@
   "description": "Populates portfolio offer tables uk_pub_customer_spine_offer_is",
   "type": "DAG",
   "properties": {
-    "tags": [
-      "offer",
-      "customer"
-    ],
+    "tags": ["offer", "customer"],
     "args": {
       "owner": "customerbtprod",
       "email": [
@@ -140,23 +137,6 @@
         "driving_table": "uk_tds_refdata_eod_is.cc_refdata_bsboffertooffertype",
         "staging_dataset": "uk_pre_customer_spine_offer_is",
         "target_type": "TYPE1"
-      },
-      "description": "Populates portfolio offer tables uk_pub_customer_spine_offer_is",
-      "dependencies": []
-    },
-    {
-      "task_id": "load_offer_type",
-      "operator": "LOADFROMGCS",
-      "parameters": {
-        "source_to_target": [],
-        "where": [],
-        "joins": [],
-        "destination_table": "offer_table",
-        "destination_dataset": "uk_pub_customer_spine_offer_is",
-        "write_disposition": "WRITETRUNCATE",
-        "driving_table": "source_table",
-        "staging_dataset": "source_dataset",
-        "table_type": "TYPE1"
       },
       "description": "Populates portfolio offer tables uk_pub_customer_spine_offer_is",
       "dependencies": []

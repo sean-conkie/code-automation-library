@@ -51,5 +51,4 @@ select a.id,
   left join uk_tds_refdata_eod_is.cc_refdata_bsboffertype b
     on (    a.offertypeid = b.id
         and b.rdmaction   != 'D')
- where a.rdmaction != 'D'
-;
+ where a.rdmaction != 'D';

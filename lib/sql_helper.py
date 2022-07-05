@@ -830,9 +830,9 @@ insert into"""
     )
 
     select = create_sql_select(logger, wtask, tables)
-    query_list = [",\n".join(select), "\n".join(frm), "\n".join(where), ";\n"]
+    query_list = [",\n".join(select),"\n", "\n".join(frm),"\n", "\n".join(where), ";\n"]
 
-    sql.append("\n".join(query_list))
+    sql.append("".join(query_list))
     outp = "\n".join(sql)
     logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100, "-"))
     return outp

@@ -81,14 +81,14 @@ def builddags(logger: ILogger, output_directory: str, config: dict) -> int:
             task.parameters = create_table_task(logger, task, config["properties"])
             task.operator = TaskOperator.BQOPERATOR.value
 
-        elif task.operator == "TruncateTable":
+        elif task.operator == TaskOperator.TRUNCATETABLE.name:
             task.parameters = create_table_task(logger, task, config["properties"])
             task.operator = TaskOperator.BQOPERATOR.value
 
-        elif task.operator == "DataCheck":
+        elif task.operator == TaskOperator.DATACHECK.name:
             task.operator = TaskOperator.BQCHEK.value
 
-        elif task.operator == TaskOperator.LOADFROMGCS.value:
+        elif task.operator == TaskOperator.LOADFROMGCS.name:
             task.parameters = create_gcs_load_task(logger, task, config["properties"])
             task.operator = TaskOperator.GCSTOBQ.value
 
@@ -147,13 +147,15 @@ def builddags(logger: ILogger, output_directory: str, config: dict) -> int:
         imports=imports,
         tasks=tasks,
         default_args=default_args,
-        dag_string=dag_string.replace("'", '"'),
+        dag_string=dag_string,
         dependencies=dependencies,
         properties=properties,
     )
 
     # reformat dag files to pass linting
-    reformatted = black.format_file_contents(output, fast=False, mode=black.FileMode())
+    reformatted = black.format_file_contents(
+        output.replace("'", '"'), fast=False, mode=black.FileMode()
+    )
 
     dag_file = f"{output_directory}{config['name']}.py"
     with open(dag_file, "w") as outfile:
