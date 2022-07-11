@@ -6,9 +6,9 @@
 --
 --------------------------------------------------------------------------------
 --
--- Description   : SQL file auto-generated for {{ task_id }}
+{{ description }}
 --
-{{description}}
+-- Comments      : NA
 --                 
 -- Usage         : Standard BQSQL Call
 --

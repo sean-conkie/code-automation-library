@@ -90,33 +90,40 @@ def format_description(description: str, section: str, target_type: FileType):
     """
     if target_type == FileType.SH:
         prefix = "#"
+        justify = 16
     elif target_type == FileType.SQL:
         prefix = "--"
+        justify = 17
 
-    first_line_prefix = f"{prefix} {section}"
-    first_line_prefix = f"{line_prefix} {':'.rjust(17 - len(line_prefix))} "
+    if description:
+        first_line_prefix = f"{prefix} {section}"
+        first_line_prefix = (
+            f"{first_line_prefix} {':'.rjust(justify - len(first_line_prefix))}"
+        )
 
-    line_prefix = f"{prefix}"
-    line_prefix = f"{line_prefix} {':'.rjust(18 - len(line_prefix))} "
+        line_prefix = f"{prefix}"
+        line_prefix = f"{line_prefix} {':'.rjust(justify - len(line_prefix))}"
 
-    pattern = r"(\n\w+\b)"
-    m = re.findall(pattern, description, re.IGNORECASE)
+        pattern = r"(\b[\w\.]+\b)"
+        m = re.findall(pattern, description, re.IGNORECASE)
 
-    lines = []
-    line = [first_line_prefix]
-    line_length = 80
-    line_length_cnt = 20
-    for word in m:
-        if (line_length_cnt + len(word) + len(line)) < line_length:
-            line.append(word)
-            line_length_cnt += len(word)
-        else:
-            lines.append(line)
-            line = [line_prefix, word]
-            line_length_cnt = len(word) + 20
+        lines = []
+        line = [first_line_prefix]
+        line_length = 80
+        line_length_cnt = 20
+        for word in m:
+            if (line_length_cnt + len(word) + len(line)) < line_length:
+                line.append(word)
+                line_length_cnt += len(word)
+            else:
+                lines.append(line)
+                line = [line_prefix, word.strip()]
+                line_length_cnt = len(word) + 20
 
-    joined_lines = []
-    for line in lines:
-        joined_lines.append(" ".join(line))
+        joined_lines = []
+        for line in lines:
+            joined_lines.append(" ".join(line))
 
-    return "\n".join(joined_lines)
+        return "\n".join(joined_lines)
+
+    return prefix

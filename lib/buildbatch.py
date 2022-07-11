@@ -22,11 +22,11 @@ from lib.sql_helper import create_sql_file
 from shutil import copy
 
 __all__ = [
-    "builddags",
+    "buildbatch",
 ]
 
 
-def builddags(logger: ILogger, output_directory: str, config: dict) -> int:
+def buildbatch(logger: ILogger, output_directory: str, config: dict) -> int:
 
     logger.info(f"batch files - {pop_stack()} STARTED".center(100, "-"))
 
@@ -63,16 +63,11 @@ def builddags(logger: ILogger, output_directory: str, config: dict) -> int:
                     if not d in config["tasks"]:
                         config["tasks"].append(d)
 
-            task.parameters = create_table_task(logger, task, config.get("properties"))
-
-        elif task.operator == TaskOperator.TRUNCATETABLE.name:
-            task.parameters = create_table_task(logger, task, config.get("properties"))
-
         sub_process_list.append(
             create_table_task(logger, task, config.get("properties"))
         )
         tasks.append(task.task_id)
-        tasks.append(f"{task.task_id}.sql")
+        scripts.append(f"{task.task_id}.sql")
 
         dependencies.extend([(task.task_id, d) for d in task.dependencies])
 
@@ -89,8 +84,8 @@ def builddags(logger: ILogger, output_directory: str, config: dict) -> int:
         tasks=format_description(" ".join(tasks), "", FileType.SH),
         description=format_description(task.description, "Description", FileType.SH),
         scripts=format_description(" ".join(scripts), "", FileType.SH),
-        cut=len(config.get("properties", {}).get("prefix")) + 1,
-        sub_process_list=sub_process_list,
+        cut=len(config.get("properties", {}).get("prefix") + "_") + 1,
+        sub_process_list="\n".join(sub_process_list),
     )
 
     scr_file = f"{output_directory}{config['name']}.sh"
@@ -107,7 +102,7 @@ def builddags(logger: ILogger, output_directory: str, config: dict) -> int:
 
     pct_file = f"{output_directory}pct_{config['name']}.sh"
     with open(pct_file, "w") as outfile:
-        outfile.write(pct_output).lower
+        outfile.write(pct_output)
 
     logger.info(f"Pop control file created: pct_{config['name']}.sh")
 
@@ -214,7 +209,7 @@ def create_table_task(logger: ILogger, task: Task, properties: dict) -> dict:
     """
 
     logger.info(f"{pop_stack()} STARTED".center(100, "-"))
-    dataset_staging = properties["dataset_staging"]
+    dataset_staging = properties.get("dataset_staging")
 
     if not "sql" in task.parameters.keys():
         task.parameters["source_to_target"] = [
@@ -222,9 +217,9 @@ def create_table_task(logger: ILogger, task: Task, properties: dict) -> dict:
             for field in task.parameters.get("source_to_target")
             if not field.get("name") in ["dw_created_dt", "dw_last_modified_dt"]
         ]
-        file_path = create_sql_file(logger, task, dataset_staging=dataset_staging)
+        create_sql_file(logger, task, dataset_staging=dataset_staging)
 
-    outp = f"{task.task_id.upper()}|{task.task_id}'|Y'\\"
+    outp = f"'{task.task_id.replace(properties.get('prefix','') + '_', '').upper()}|{task.task_id.replace(properties.get('prefix','') + '_', '')}|Y'\\"
 
     logger.info(f"{pop_stack()} COMPLETED SUCCESSFULLY".center(100, "-"))
     return outp

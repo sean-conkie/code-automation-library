@@ -4,6 +4,7 @@ import re
 import sys
 import traceback
 
+from lib.buildbatch import buildbatch
 from lib.builddags import builddags
 from datetime import datetime
 from lib.jsonhelper import get_json
@@ -15,7 +16,6 @@ def main(logger: ILogger, args: argparse.Namespace) -> int:
     logger.info(f"job files - {pop_stack()} STARTED".center(100, "-"))
 
     dpath = args.config_directory
-    opath = args.output_directory
     config_list = []
 
     # create a list of config files using the source directory (dpath), if the
@@ -38,6 +38,10 @@ def main(logger: ILogger, args: argparse.Namespace) -> int:
         job_type = cfg.get("type")
         if job_type == "DAG":
             if builddags(logger, args.output_directory, cfg) != 0:
+                logger.error(f"an error occured processing {path}")
+                sys.exit(1)
+        elif job_type == "BATCH":
+            if buildbatch(logger, args.output_directory, cfg) != 0:
                 logger.error(f"an error occured processing {path}")
                 sys.exit(1)
         else:
@@ -80,9 +84,9 @@ if __name__ == "__main__":
     known_args, args = parser.parse_known_args()
 
     log_file_name = os.path.normpath(
-        f'./logs/builddags_{datetime.now().strftime("%Y-%m-%dT%H%M%S")}.log'
+        f'./logs/buildjobs_{datetime.now().strftime("%Y-%m-%dT%H%M%S")}.log'
     )
-    logger = ILogger("builddags", log_file_name, known_args.level)
+    logger = ILogger("buildjobs", log_file_name, known_args.level)
 
     try:
         main(logger, known_args)

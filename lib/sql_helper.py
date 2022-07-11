@@ -23,6 +23,7 @@ from lib.baseclasses import (
     TableType,
     converttoobj,
 )
+from lib.helper import FileType, format_description
 from lib.logger import ILogger, pop_stack
 from operator import itemgetter
 
@@ -65,6 +66,7 @@ def create_sql_file(
     output = template.render(
         sql=sql,
         task_id=task.task_id,
+        description=format_description(task.description, "Description", FileType.SQL),
         created_date=datetime.now().strftime("%d %b %Y"),
     )
 
@@ -278,7 +280,7 @@ def create_type_1_sql(
     delta = create_delta_conditions(logger, task)
     wtask = copy.deepcopy(task)
 
-    if delta:
+    if len(delta):
         for d in delta:
             wtask.parameters.where.append(d)
 
@@ -292,7 +294,7 @@ def create_type_1_sql(
             re.MULTILINE,
         )
     else:
-        task.parameters.source_to_target.append(
+        wtask.parameters.source_to_target.append(
             Field(
                 transformation=f"current_timestamp()",
                 name="dw_last_modified_dt",
@@ -306,7 +308,7 @@ def create_type_1_sql(
         )
     ]
 
-    if delta:
+    if len(delta):
         wtask.parameters.driving_table = f"{wtask.parameters.destination_dataset}.{wtask.parameters.destination_table}"
         wtask.parameters.destination_dataset = task.parameters.destination_dataset
         wtask.parameters.destination_table = task.parameters.destination_table
@@ -556,7 +558,7 @@ def create_type_2_sql(
     for analytic in analytics:
         wtask.add_analytic(analytic)
     delta = create_delta_conditions(logger, task)
-    if delta:
+    if len(delta):
         for d in delta:
             wtask.parameters.where.append(d)
 
@@ -568,7 +570,7 @@ def create_type_2_sql(
     )
 
     # if delta, take all primary keys identified and add full history to p1
-    if delta:
+    if len(delta):
         join_on = []
         for field in task.parameters.source_to_target:
             if field.hk:
@@ -688,10 +690,16 @@ def create_type_2_sql(
         ),
     )
 
-    if delta:
+    if len(delta):
         sql.extend(create_delta_comparisons(logger, td_task))
 
     else:
+        td_task.parameters.source_to_target.append(
+            Field(
+                transformation=f"current_timestamp()",
+                name="dw_last_modified_dt",
+            )
+        )
         sql.append(
             create_table_query(
                 logger,
@@ -830,7 +838,14 @@ insert into"""
     )
 
     select = create_sql_select(logger, wtask, tables)
-    query_list = [",\n".join(select),"\n", "\n".join(frm),"\n", "\n".join(where), ";\n"]
+    query_list = [
+        ",\n".join(select),
+        "\n",
+        "\n".join(frm),
+        "\n",
+        "\n".join(where),
+        ";\n",
+    ]
 
     sql.append("".join(query_list))
     outp = "\n".join(sql)
