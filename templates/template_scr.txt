@@ -1,0 +1,453 @@
+#!/bin/bash
+################################################################################
+#
+# filename      : {{job_id}}.sh
+# author        : Code Generator
+# date created  : {{ created_date }}
+#
+################################################################################
+#
+# description   : Main control script for the upload of;
+{{tasks}} 
+#
+{{description}}
+#
+# usage         : standard bash call
+#
+# libraries     : azlib_log_timings.sh (script logging function)
+#                 azlib_process_control.sh (control table script functions)
+#
+# called by     : Control-m.
+#
+# calls         : sql scripts:-
+{{scripts}}
+#
+# parameters    : none
+#
+# return values : 0   successful
+#                 1   failure
+#
+################################################################################
+# revisions
+# ==============================================================================
+# date    userid  mr#            comments                                   ver.
+# ------  ------  -------------  -----------------------------------------  ----
+################################################################################
+
+################################################################################
+# Set up standard control and logging
+################################################################################
+export LOGSCRIPT=$SYS_SCR/azlib_log_timings.sh
+. $SYS_SCR/azlib_process_control.sh
+. $SYS_SCR/azlib_run_bq.sh
+export BASENAME=`basename $0`
+
+################################################################################
+# Create log file, moving old version to a .failed if it exists.
+################################################################################
+export LOG=$SYS_LOG/$BASENAME.`date +%d%m%Y`.log
+if [ -f $LOG ]
+then
+  mv -f $LOG $LOG.failed.`date +%d%m%y-%H:%M:%S`
+fi
+>$LOG
+
+################################################################################
+# Initialisation - Set up variables, and retrieve parameters for process run
+################################################################################
+. $LOGSCRIPT START $BASENAME "Populate dimension tables"
+. $LOGSCRIPT START init.process "Initialisation"
+gcloud logging write $BASENAME "Initialising process run" --severity=INFO 2>>/dev/null
+
+################################################################################
+# Get the start datetime for the process run
+################################################################################
+get_current_datetime
+if [ $? != 0 ]
+then
+  echo "ERROR : could not determine start time for process run" >>$LOG
+  gcloud logging write $BASENAME "could not determine start time for process run" --severity=ERROR 2>>/dev/null
+  . $LOGSCRIPT FAIL init.process
+  . $LOGSCRIPT FAIL $BASENAME
+  exit 1
+fi
+
+PROCESS_START_DATETIME=$AZLIB_PROC_CTRL_PARAM_SYSTEM_DATE
+
+################################################################################
+# Get the current status of the job from the CTRL_PROCESS_STATUS table
+################################################################################
+echo "Retrieving the warehouse load conditions..." >>$LOG
+determine_process_bounds_dt
+if [ $? -ne 0 ]
+then
+  echo "ERROR : could not determine boundary values for process run" >>$LOG
+  gcloud logging write $BASENAME "could not determine boundary values for process run" --severity=ERROR 2>>/dev/null
+  . $LOGSCRIPT FAIL init.process
+  . $LOGSCRIPT FAIL $BASENAME
+  exit 1
+fi
+
+export CURRENT_STATUS="$AZLIB_PROC_CTRL_CURRENT_STATUS"
+export PROCESS_RUN_ID="$AZLIB_PROC_CTRL_PROCESS_RUN_ID"
+export BASENAME_UPPER_BOUND="$AZLIB_PROC_CTRL_UPPER_BOUND"
+export BASENAME_LOWER_BOUND="$AZLIB_PROC_CTRL_LOWER_BOUND"
+export BASENAME_UPPER_BOUND_TS="$AZLIB_PROC_CTRL_UPPER_BOUND".999999
+export FILE_DATE="$AZLIB_PROC_CTRL_FILE_DATE"
+
+gcloud logging write $BASENAME "Determined next process run id to be $PROCESS_RUN_ID" --severity=INFO 2>>/dev/null
+
+################################################################################
+# We need to manipulate the date bounds into a format that can be read by BQ
+# just run two simple SQL scripts to do this
+################################################################################
+SQL_LOWER_BOUND=`psql -h localhost -d control_manager -U control_load -p 3205 -q -t -A \
+                      -v lower_date_bound="'$BASENAME_LOWER_BOUND'" <<DNE
+select to_char(to_timestamp(:lower_date_bound, 'DD-MON-YYYY HH24:MI:SS'),'YYYY-MM-DD HH24:MI:SS');
+DNE`
+
+SQL_UPPER_BOUND=`psql -h localhost -d control_manager -U control_load -p 3205 -q -t -A \
+                      -v upper_date_bound="'$BASENAME_UPPER_BOUND'" <<DNE
+select to_char(to_timestamp(:upper_date_bound, 'DD-MON-YYYY HH24:MI:SS'),'YYYY-MM-DD HH24:MI:SS.999999');
+DNE`
+
+################################################################################
+# Rename Log file to have provisional process run id rather than run date in
+# the filename moving any existing version of the new log name to .failed
+################################################################################
+OLDLOG=$LOG
+export LOG=$SYS_LOG/$BASENAME.check_$FILE_DATE.log
+if [ -f $LOG ]
+then
+  mv -f $LOG $LOG.failed.`date +%d%m%y-%H:%M:%S`
+fi
+
+mv -f $OLDLOG $LOG
+
+echo " " >>$LOG
+echo "################################################################################" >>$LOG
+echo "# Log file renamed to $LOG while verifying process status" >>$LOG
+echo "################################################################################" >>$LOG
+echo " " >>$LOG
+
+################################################################################
+# verify that the sub-processes status will allow us to run
+################################################################################
+echo "Checking job sub-process conditions...." >>$LOG
+verify_sub_process_conditions $BASENAME "$PROCESS_RUN_ID" DATE
+SUB_PROCESS_STATUS=$?
+
+if [    $SUB_PROCESS_STATUS != 0 \
+     -a $SUB_PROCESS_STATUS != 10 \
+     -a $SUB_PROCESS_STATUS != 20 ]
+then
+
+  ##############################################################################
+  # Call failed with unexpected error, fail with generic error message.
+  ##############################################################################
+  echo "ERROR : Could not determine validity of sub-processes for current run" >>$LOG
+  gcloud logging write $BASENAME "Could not determine validity of sub-processes for current run" --severity=ERROR 2>>/dev/null
+  . $LOGSCRIPT FAIL init.process
+  . $LOGSCRIPT FAIL $BASENAME
+  exit 1
+
+else
+
+  ##############################################################################
+  # If we have a code of 20, It is a serious error, so fail with error message
+  # If it's 10, set a flag of ALL_SUB_PROCESSES_SUCCESSFUL to 'Y'.
+  # In all other cases, set ALL_SUB_PROCESSES_SUCCESSFUL to 'N'.
+  ##############################################################################
+  if [ $SUB_PROCESS_STATUS = 20 ]
+  then
+
+    echo "ERROR : Control tables in inconsistant state, MANUAL INTERVENTION REQUIRED" >>$LOG
+    gcloud logging write $BASENAME "Control tables in inconsistant state, MANUAL INTERVENTION REQUIRED" --severity=ERROR 2>>/dev/null
+    . $LOGSCRIPT FAIL init.process
+    . $LOGSCRIPT FAIL $BASENAME
+    exit 1
+
+  elif [ $SUB_PROCESS_STATUS = 10 ]
+  then
+
+    echo "Verified ALL sub-processes run successfully for $PROCESS_RUN_ID">>$LOG
+    gcloud logging write $BASENAME "Verified ALL sub-processes run successfully for $PROCESS_RUN_ID" --severity=INFO 2>>/dev/null
+    ALL_SUB_PROCESSES_SUCCESSFUL='Y'
+
+  else
+
+    echo "Verified sub-processes still to run for $PROCESS_RUN_ID">>$LOG
+    gcloud logging write $BASENAME "Verified sub-processes still to run for $PROCESS_RUN_ID" --severity=INFO 2>>/dev/null
+    ALL_SUB_PROCESSES_SUCCESSFUL='N'
+
+  fi #$SUB_PROCESS_STATUS =...
+
+fi #$SUB_PROCESS_STATUS !=...
+
+################################################################################
+# Rename Log file to have verified process run id moving any existing version
+# of the new log name to .failed
+################################################################################
+OLDLOG=$LOG
+export LOG=$SYS_LOG/$BASENAME.$FILE_DATE.log
+if [ -f $LOG ]
+then
+  mv -f $LOG $LOG.failed.`date +%d%m%y-%H:%M:%S`
+fi
+
+mv -f $OLDLOG $LOG
+
+echo " " >>$LOG
+echo "################################################################################" >>$LOG
+echo "# Log file renamed to $LOG" >>$LOG
+echo "################################################################################" >>$LOG
+echo " " >>$LOG
+
+################################################################################
+# We have all the parameters we need to pass through to the SQL scripts -
+# create a CORE_SQL_PARAMS variable to hold them to pass into sql calls
+################################################################################
+CORE_SQL_PARAMS="lower_date_bound:STRING:$BASENAME_LOWER_BOUND;upper_date_bound:STRING:$BASENAME_UPPER_BOUND_TS"
+
+################################################################################
+# We have verified that it is safe to run.  lock the job.
+################################################################################
+echo "Registering process run...">>$LOG
+register_process_run $BASENAME
+if [ $? != 0 ]
+then
+  echo "ERROR : could not register process run.  Job may already be running" >>$LOG
+  gcloud logging write $BASENAME "could not register process run $PROCESS_RUN_ID.  Job may already be running" --severity=ERROR 2>>/dev/null
+  . $LOGSCRIPT FAIL init.process
+  . $LOGSCRIPT FAIL $BASENAME
+  exit 1
+else
+  echo "registered process run" >>$LOG
+fi
+
+################################################################################
+# End of initialisation phase
+################################################################################
+. $LOGSCRIPT END init.process
+
+################################################################################
+# If we are at the 'all sub-processes successful' phase, then simply run
+# a clean-up.
+################################################################################
+if [ $ALL_SUB_PROCESSES_SUCCESSFUL = 'Y' ]
+then
+
+  . $LOGSCRIPT START clean_up.process "Clean-up"
+
+  echo "Updating Status Table..." >>$LOG
+
+  ##############################################################################
+  # Get the end datetime of process run
+  ##############################################################################
+  get_current_datetime
+  if [ $? -ne 0 ]
+  then
+    echo "ERROR : Could not determine end time for process run" >>$LOG
+    gcloud logging write $BASENAME "Could not determine end time for process run $PROCESS_RUN_ID" --severity=ERROR 2>>/dev/null
+    deregister_process_run $BASENAME
+    . $LOGSCRIPT FAIL clean_up.process
+    . $LOGSCRIPT FAIL $BASENAME
+    exit 1
+  fi
+
+  PROCESS_END_DATETIME=$AZLIB_PROC_CTRL_PARAM_SYSTEM_DATE
+
+  ##############################################################################
+  # Update the Status table
+  ##############################################################################
+  update_process_status $BASENAME "$PROCESS_RUN_ID" "$PROCESS_START_DATETIME" \
+                        "$PROCESS_END_DATETIME" DATE
+  if [ $? -ne 0 ]
+  then
+    echo "ERROR : Could not update status table." >>$LOG
+    gcloud logging write $BASENAME "Could not update status table for process run $PROCESS_RUN_ID" --severity=ERROR 2>>/dev/null
+    deregister_process_run $BASENAME
+    . $LOGSCRIPT FAIL clean_up.process
+    . $LOGSCRIPT FAIL $BASENAME
+    exit 1
+  fi
+
+  deregister_process_run $BASENAME
+  if [ $? -ne 0 ]
+  then
+    echo "ERROR: Could not deregister the process.  You may need to manually remove the lock" >>$LOG
+    gcloud logging write $BASENAME "Could not deregister process run $PROCESS_RUN_ID.  Manually remove lock." --severity=ERROR 2>>/dev/null
+    . $LOGSCRIPT FAIL clean_up.process
+    . $LOGSCRIPT FAIL $BASENAME
+    exit 1
+  fi
+
+  . $LOGSCRIPT END clean_up.process
+  . $LOGSCRIPT END $BASENAME
+  gcloud logging write $BASENAME "Completed process run $PROCESS_RUN_ID." --severity=INFO 2>>/dev/null
+  exit 0
+
+fi
+
+################################################################################
+# Loop around all the tables we need to populate
+#
+# In the SUB_PROCESS_DETAILS_LIST variable below, each entry must contain
+# sub_process_name|sql_name|enabled
+#
+# where enabled is Y on N.
+################################################################################
+SUB_PROCESS_PREFIX=`echo $BASENAME | cut -c1-{{cut}}`
+SUB_PROCESS_DETAILS_LIST={{sub_process_list}}
+
+for NEXT_SUB_PROCESS_DETAILS in $SUB_PROCESS_DETAILS_LIST
+do
+
+  SUB_PROCESS_NAME=`echo $NEXT_SUB_PROCESS_DETAILS | cut -d"|" -f1`
+  SUB_PROCESS_EXE=${SUB_PROCESS_PREFIX}`echo $NEXT_SUB_PROCESS_DETAILS | cut -d"|" -f2`.sql
+  SUB_PROCESS_DESC="Populate $SUB_PROCESS_NAME ($SUB_PROCESS_EXE)"
+  SUB_PROCESS_ENABLED=`echo $NEXT_SUB_PROCESS_DETAILS | cut -d"|" -f3`
+
+  echo "Checking to see if we have already run sub process $SUB_PROCESS_NAME...">>$LOG
+  gcloud logging write $BASENAME "Checking if already run sub process $SUB_PROCESS_NAME for run id $PROCESS_RUN_ID" --severity=INFO 2>>/dev/null
+
+  verify_sub_process_status $BASENAME $SUB_PROCESS_NAME COMPLETE \
+                            "$PROCESS_RUN_ID" DATE
+  if [ $? -ne 0 ]
+  then
+    echo "ERROR : could not determine run status of $SUB_PROCESS_NAME" >>$LOG
+    gcloud logging write $BASENAME "Could not determine run status of $SUB_PROCESS_NAME for run id $PROCESS_RUN_ID" --severity=ERROR 2>>/dev/null
+    deregister_process_run $BASENAME
+    . $LOGSCRIPT FAIL $BASENAME
+    exit 1
+  fi
+
+  SUB_PROCESS_ALREADY_RUN=$AZLIB_PROC_CTRL_QUERY_RESULT
+
+  if [ $SUB_PROCESS_ALREADY_RUN = 'N' -a $SUB_PROCESS_ENABLED = 'Y' ]
+  then
+
+    . $LOGSCRIPT START $SUB_PROCESS_NAME "$SUB_PROCESS_DESC"
+    gcloud logging write $BASENAME "Starting $SUB_PROCESS_NAME for run id $PROCESS_RUN_ID - $SUB_PROCESS_DESC" --severity=INFO 2>>/dev/null
+
+    set_sub_process_status $BASENAME $SUB_PROCESS_NAME PROCESSING "$PROCESS_RUN_ID" DATE
+    if [ $? -ne 0 ]
+    then
+      echo "ERROR : could not set sub-process status to PROCESSING" >>$LOG
+      gcloud logging write $BASENAME "could not set sub-process status to PROCESSING for run id $PROCESS_RUN_ID" --severity=ERROR 2>>/dev/null
+      . $LOGSCRIPT FAIL $SUB_PROCESS_NAME
+      deregister_process_run $BASENAME
+      . $LOGSCRIPT FAIL $BASENAME
+      exit 1
+    fi
+
+    run_bq_sql_script $SYS_SQL/$SUB_PROCESS_EXE "$CORE_SQL_PARAMS" >>$LOG 2>>$LOG
+    if [ $? -ne 0 ]
+    then
+      gcloud logging write $BASENAME "sub-process $SUB_PROCESS_NAME failed for run id $PROCESS_RUN_ID.  Check Linux log" --severity=ERROR 2>>/dev/null
+      set_sub_process_status $BASENAME $SUB_PROCESS_NAME FAILURE "$PROCESS_RUN_ID" DATE
+      . $LOGSCRIPT FAIL $SUB_PROCESS_NAME
+      deregister_process_run $BASENAME
+      . $LOGSCRIPT FAIL $BASENAME
+      exit 1
+    fi
+
+    set_sub_process_status $BASENAME $SUB_PROCESS_NAME COMPLETE "$PROCESS_RUN_ID" DATE
+    if [ $? -ne 0 ]
+    then
+      gcloud logging write $BASENAME "Could not set $SUB_PROCESS_NAME to complete for run id $PROCESS_RUN_ID." --severity=ERROR 2>>/dev/null
+      . $LOGSCRIPT FAIL $SUB_PROCESS_NAME
+      deregister_process_run $BASENAME
+      . $LOGSCRIPT FAIL $BASENAME
+      exit 1
+    fi
+
+    . $LOGSCRIPT END $SUB_PROCESS_NAME
+    gcloud logging write $BASENAME "Sub-process $SUB_PROCESS_NAME is complete for run id $PROCESS_RUN_ID." --severity=INFO 2>>/dev/null
+
+  else
+
+    if [ $SUB_PROCESS_ENABLED = 'N' ]
+    then
+      echo "$SUB_PROCESS_NAME currently disabled.  Skipping..." >>$LOG
+      gcloud logging write $BASENAME "Sub-process $SUB_PROCESS_NAME currently disabled.  Skipping..." --severity=INFO 2>>/dev/null
+    else
+      echo "$SUB_PROCESS_NAME already completed!" >>$LOG
+      gcloud logging write $BASENAME "Sub-process $SUB_PROCESS_NAME already completed for run id $PROCESS_RUN_ID." --severity=INFO 2>>/dev/null
+    fi
+
+  fi #[ $SUB_PROCESS_ALREADY_RUN = 'N' -a $SUB_PROCESS_ENABLED = 'Y' ]
+
+done #for NEXT_SUB_PROCESS_DETAILS in $SUB_PROCESS_DETAILS_LIST
+
+################################################################################
+# End of processing.  Run Clean-up
+################################################################################
+. $LOGSCRIPT START clean_up.process "Clean-up"
+
+################################################################################
+# Set all sub-processes to 'Success' status
+################################################################################
+echo "Reached end of sub-processes.  Cleaning-up sub-process statuses..." >>$LOG
+clean_up_sub_processes $BASENAME "$PROCESS_RUN_ID" DATE
+if [ $? != 0 ]
+then
+  echo "ERROR : Could not clean-up sub-process statuses" >>$LOG
+  gcloud logging write $BASENAME "Could not clean-up sub-process statuses for run id $PROCESS_RUN_ID." --severity=ERROR 2>>/dev/null
+  deregister_process_run $BASENAME
+  . $LOGSCRIPT FAIL clean_up.process
+  . $LOGSCRIPT FAIL $BASENAME
+  exit 1
+fi
+
+################################################################################
+# Get the end datetime of process run
+################################################################################
+echo "Updating Status Table...">>$LOG
+get_current_datetime
+if [ $? != 0 ]
+then
+  echo "ERROR : Could not determine end time for process run" >>$LOG
+  gcloud logging write $BASENAME "Could not determine end time for run id $PROCESS_RUN_ID." --severity=ERROR 2>>/dev/null
+  deregister_process_run $BASENAME
+  . $LOGSCRIPT FAIL clean_up.process
+  . $LOGSCRIPT FAIL $BASENAME
+  exit 1
+fi
+
+PROCESS_END_DATETIME=$AZLIB_PROC_CTRL_PARAM_SYSTEM_DATE
+
+################################################################################
+# Update the Status table
+################################################################################
+update_process_status $BASENAME "$PROCESS_RUN_ID" "$PROCESS_START_DATETIME" \
+                      "$PROCESS_END_DATETIME" DATE
+if [ $? != 0 ]
+then
+  echo "ERROR : Could not update status table." >>$LOG
+  gcloud logging write $BASENAME "Could not update status table for run id $PROCESS_RUN_ID." --severity=ERROR 2>>/dev/null
+  deregister_process_run $BASENAME
+  . $LOGSCRIPT FAIL clean_up.process
+  . $LOGSCRIPT FAIL $BASENAME
+  exit 1
+fi
+
+################################################################################
+# Deregister the run, to allow subsequent runs
+################################################################################
+echo "deregistering the run...">>$LOG
+deregister_process_run $BASENAME
+if [ $? != 0 ]
+then
+  echo "ERROR: Could not deregister the process.  You may need to manually remove the lock" >>$LOG
+  gcloud logging write $BASENAME "Could not deregister process run $PROCESS_RUN_ID.  Manually remove lock." --severity=ERROR 2>>/dev/null
+  . $LOGSCRIPT FAIL clean_up.process
+  . $LOGSCRIPT FAIL $BASENAME
+  exit 1
+fi
+
+. $LOGSCRIPT END clean_up.process
+. $LOGSCRIPT END $BASENAME
+gcloud logging write $BASENAME "Completed process run $PROCESS_RUN_ID." --severity=INFO 2>>/dev/null
+
+exit 0

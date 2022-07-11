@@ -412,11 +412,13 @@ class Task(object):
         operator: str,
         parameters: dict,
         dependencies: list[str] = [],
+        description=None
     ) -> None:
         self._task_id = task_id
         self._operator = operator
         self._parameters = parameters
         self._dependencies = dependencies
+        self._description = description
 
     def __str__(self) -> str:
         return str(todict(self))
@@ -430,6 +432,13 @@ class Task(object):
         Returns the task_id
         """
         return self._task_id
+    
+    @property
+    def description(self) -> str:
+        """
+        Returns the description
+        """
+        return self._description
 
     @property
     def operator(self) -> str:
@@ -914,8 +923,9 @@ class SQLTask(Task):
         operator: TaskOperator,
         parameters: SQLParameter,
         dependencies: list[str] = [],
+        description=None
     ) -> None:
-        super().__init__(task_id, operator, parameters, dependencies)
+        super().__init__(task_id, operator, parameters, dependencies, description)
 
     @property
     def operator(self) -> TaskOperator:
@@ -923,6 +933,13 @@ class SQLTask(Task):
         Returns the operator
         """
         return self._operator
+
+    @property
+    def description(self) -> str:
+        """
+        Returns the description
+        """
+        return self._description
 
     @operator.setter
     def operator(self, value: TaskOperator) -> None:

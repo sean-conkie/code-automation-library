@@ -1,0 +1,172 @@
+#!/bin/bash
+################################################################################
+#
+# filename      : pct_{{job_id}}.sh
+# author        : Code Generator
+# date created  : {{ created_date }}
+#
+################################################################################
+#
+# description   : Populate control tables for the {{task_id}}.sh feed
+#
+# comments      : This script does the following actions:-
+#                 1) removes all parameter values for job from control table
+#                 2) purges process status from control table
+#                 3) purges sub process status records from control table
+#                 4) populates all control tables with new values
+#
+# usage         : standard bash call
+#
+# libraries     : n/a
+#
+# called by     : command line call to docker.
+#
+# calls         : n/a
+#
+# parameters    : n/a - it will prompt you
+#
+# return values : 0   successful
+#                 1   failure
+#
+################################################################################
+# revisions
+# ==============================================================================
+# date    userid  mr#             comments                                  ver.
+# ------  ------  -------------   ----------------------------------------  ----
+################################################################################
+
+################################################################################
+# Set the name of the job we are updating control tables for
+################################################################################
+PROCESS_NAME={{job_id}}.sh
+
+################################################################################
+# Echo an introduction to the script, and get feeback from the user to
+# confirm that they want to continue
+################################################################################
+echo "**********************************************************************"
+echo "*                                                                    *"
+echo "* Pop Control tables                                                 *"
+echo "* -----------------------------------                                *"
+echo "*                                                                    *"
+echo "* IMPORTANT WARNING - PLEASE READ CAREFULLY!!!                       *"
+echo "*                                                                    *"
+echo "* This script will remove all configuration on the control DB for    *"
+echo "* named process.                                                     *"
+echo "*                                                                    *"
+echo "* It will blow away all settings, and you can't recover them.        *"
+echo "*                                                                    *"
+echo "* It does not validate what you enter.  It will prompt you for       *"
+echo "* values and give you a final chance to not commit.                  *"
+echo "*                                                                    *"
+echo "* THINK BEFORE YOU TYPE!!!                                           *"
+echo "*                                                                    *"
+echo "**********************************************************************"
+echo " "
+echo "This is running for the $PROCESS_NAME process.  Do you want to continue? [Y/N] >"
+read CONFIRM_PROCESSING
+
+################################################################################
+# Loop until we get a 'Y' or 'N' answer.
+################################################################################
+while [ ${CONFIRM_PROCESSING:-'Z'} != 'Y' -a ${CONFIRM_PROCESSING:-'Z'} != 'N' ]
+do
+
+  echo "Invalid Selection!"
+  echo "Do you want to continue? [Y/N] >"
+  read CONFIRM_PROCESSING
+
+done
+
+if [ $CONFIRM_PROCESSING = 'N' ]
+then
+  echo "Aborting Processing!!!"
+  exit 0
+fi
+
+echo " "
+echo "Enter process run id for job (date in DD-MON-YYYY format) >"
+read PROCESS_RUN_ID
+
+echo " "
+echo "Enter upper bound offset (number) >"
+read UPPER_BOUND_OFFSET
+
+echo " "
+echo "You entered the following values :-"
+echo "PROCESS_RUN_ID = $PROCESS_RUN_ID"
+echo "UPPER_BOUND_OFFSET = $UPPER_BOUND_OFFSET"
+
+echo " "
+echo "Do you want to continue? [Y/N] >"
+read CONFIRM_PROCESSING
+
+################################################################################
+# Loop until we get a 'Y' or 'N' answer.
+################################################################################
+while [ ${CONFIRM_PROCESSING:-'Z'} != 'Y' -a ${CONFIRM_PROCESSING:-'Z'} != 'N' ]
+do
+
+  echo "Invalid Selection!"
+  echo "Do you want to continue? [Y/N] >"
+  read CONFIRM_PROCESSING
+
+done
+
+if [ $CONFIRM_PROCESSING = 'N' ]
+then
+  echo "Aborting Processing!!!"
+  exit 0
+fi
+
+################################################################################
+# Clear down control tables.
+################################################################################
+echo "Purging old control values..."
+
+psql -e -h localhost -p 3205 -U control_load -d control_manager \
+     -v process_name="'$PROCESS_NAME'" \
+     -v ON_ERROR_STOP=1 <<DNE
+select purge_all_sub_process_statuses(:process_name);
+select purge_all_parameter_values(:process_name);
+select purge_process_status(:process_name);
+DNE
+
+if [ $? -ne 0 ]
+then
+  echo "ERROR - could not purge old control values..."
+  exit 1
+fi
+
+################################################################################
+# Clear down control tables.
+################################################################################
+echo "Populating control values..."
+
+psql -e -h localhost -p 3205 -U control_load -d control_manager \
+     -v process_name="'$PROCESS_NAME'" \
+     -v process_run_id="'$PROCESS_RUN_ID'" \
+     -v upper_bound_offset=$UPPER_BOUND_OFFSET \
+     -v ON_ERROR_STOP=1 <<DNE
+select insert_process_status(:process_name,
+                             to_timestamp(:process_run_id,'DD-MON-YYYY') - interval '1 second',
+                             to_timestamp(:process_run_id,'DD-MON-YYYY') - interval '1 day',
+                             to_timestamp(:process_run_id,'DD-MON-YYYY') - interval '86399 seconds',
+                             0,
+                             0,
+                             0);
+select set_parameter_value(:process_name,
+                           'UPPER_BOUND_OFFSET',
+                           :upper_bound_offset);
+DNE
+
+if [ $? -ne 0 ]
+then
+  echo "ERROR - could not populate new control values..."
+  exit 1
+fi
+
+echo " "
+echo "Done!"
+
+exit 0

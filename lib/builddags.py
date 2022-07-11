@@ -63,6 +63,7 @@ def builddags(logger: ILogger, output_directory: str, config: dict) -> int:
             t.get("operator"),
             t.get("parameters"),
             t.get("dependencies"),
+            t.get("description"),
         )
         logger.info(f'creating task "{task.task_id}" - {pop_stack()}')
         if task.operator == TaskOperator.CREATETABLE.name:

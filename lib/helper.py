@@ -1,4 +1,14 @@
-_all_ = ["isnullorwhitespace"]
+import re
+
+from enum import Enum
+
+__all__ = [
+    "isnullorwhitespace",
+    "isnullorempty",
+    "ifnull",
+    "FileType",
+    "format_description",
+]
 
 
 def isnullorwhitespace(string: str) -> bool:
@@ -62,3 +72,51 @@ def ifnull(string: str, default: str) -> str:
         return default
     else:
         return string
+
+
+class FileType(Enum):
+    SH = 1
+    SQL = 2
+
+
+def format_description(description: str, section: str, target_type: FileType):
+    """
+    It takes a string, and returns a string
+
+    Args:
+      description (str): The description of the function
+      section (str): The section of the script that the description is for.
+      target_type (FileType): The type of file you want to generate.
+    """
+    if target_type == FileType.SH:
+        prefix = "#"
+    elif target_type == FileType.SQL:
+        prefix = "--"
+
+    first_line_prefix = f"{prefix} {section}"
+    first_line_prefix = f"{line_prefix} {':'.rjust(17 - len(line_prefix))} "
+
+    line_prefix = f"{prefix}"
+    line_prefix = f"{line_prefix} {':'.rjust(18 - len(line_prefix))} "
+
+    pattern = r"(\n\w+\b)"
+    m = re.findall(pattern, description, re.IGNORECASE)
+
+    lines = []
+    line = [first_line_prefix]
+    line_length = 80
+    line_length_cnt = 20
+    for word in m:
+        if (line_length_cnt + len(word) + len(line)) < line_length:
+            line.append(word)
+            line_length_cnt += len(word)
+        else:
+            lines.append(line)
+            line = [line_prefix, word]
+            line_length_cnt = len(word) + 20
+
+    joined_lines = []
+    for line in lines:
+        joined_lines.append(" ".join(line))
+
+    return "\n".join(joined_lines)
