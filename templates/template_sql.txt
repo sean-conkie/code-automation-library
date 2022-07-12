@@ -1,15 +1,15 @@
 --------------------------------------------------------------------------------
 --
 -- Filename      : {{task_id}}.sql
--- Author        : Cloud Composer
+-- Author        : Code Generator
 -- Date Created  : {{ created_date }}
 --
 --------------------------------------------------------------------------------
 --
--- Description   : SQL file auto-generated for {{ task_id }}
+{{ description }}
 --
 -- Comments      : NA
---
+--                 
 -- Usage         : Standard BQSQL Call
 --
 -- Called By     : {{task_id}}
