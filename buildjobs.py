@@ -48,8 +48,9 @@ def main(logger: ILogger, args: argparse.Namespace) -> int:
         else:
             logger.error(f"No job type supplied in {path}")
 
-        buildartifacts(logger, args.output_directory, config)
+        buildartifacts(logger, args.output_directory, cfg)
 
+    logger.info(f"job files {pop_stack()} COMPLETED SUCCESSFULLY".center(100, "-"))
     return 0
 
 

@@ -1,7 +1,8 @@
 import json
 import re
 
-from lib.baseclasses import Task, converttoobj, ConversionType
+from lib.baseclasses import converttoobj, ConversionType, Field, Task
+from lib.helper import ifnull
 from lib.logger import ILogger, pop_stack
 
 __all__ = [
@@ -17,8 +18,6 @@ def buildartifacts(logger: ILogger, output_directory: str, config: dict) -> int:
     # the statements needed to be inserted into the template
     logger.info(f"creating object artifacts - {config['name']}")
 
-    tasks = []
-
     # for each item in the task array, check the operator type and use this
     # to determine the task parameters to be used
     for t in config["tasks"]:
@@ -31,18 +30,38 @@ def buildartifacts(logger: ILogger, output_directory: str, config: dict) -> int:
             t.get("description"),
         )
 
-        t["parameters"]["source_to_target"] = converttoobj(
-            t["paraneters"].get("source_to_target", []), ConversionType.SOURCE
+        task.parameters["source_to_target"] = converttoobj(
+            task.parameters.get("source_to_target", []), ConversionType.SOURCE
         )
 
-        t["parameters"]["joins"] = converttoobj(
-            t["paraneters"].get("joins", []), ConversionType.JOIN
-        )
-        t["parameters"]["where"] = converttoobj(
-            t["paraneters"].get("where", []), ConversionType.WHERE
+        dw_index = 1
+        for i, field in enumerate(task.parameters["source_to_target"]):
+            if not field.pk:
+                dw_index = i
+                break
+        task.parameters["source_to_target"].insert(
+            dw_index,
+            Field(
+                name="dw_last_modified_dt",
+            ),
         )
 
-        if t.parameters.get("build_artifacts"):
+        if task.parameters.get("delta"):
+            task.parameters["source_to_target"].insert(
+                dw_index,
+                Field(
+                    name="dw_created_dt",
+                ),
+            )
+
+        task.parameters["joins"] = converttoobj(
+            task.parameters.get("joins", []), ConversionType.JOIN
+        )
+        task.parameters["where"] = converttoobj(
+            task.parameters.get("where", []), ConversionType.WHERE
+        )
+
+        if task.parameters.get("build_artifacts", True):
             logger.info(f'creating artifacts for "{task.task_id}" - {pop_stack()}')
             table_def_content = [
                 {
@@ -50,11 +69,9 @@ def buildartifacts(logger: ILogger, output_directory: str, config: dict) -> int:
                     "type": field.data_type,
                     "mode": "nullable" if field.nullable else "required",
                 }
-                for field in t["parameters"]["source_to_target"]
+                for field in task.parameters["source_to_target"]
             ]
-            table_definition = task["parameters"].get(
-                "destination_table", "table_definition"
-            )
+            table_definition = task.parameters["destination_table"]
             with open(f"{output_directory}{table_definition}.json", "w") as outfile:
                 outfile.write(json.dumps(table_def_content))
 
@@ -64,22 +81,25 @@ def buildartifacts(logger: ILogger, output_directory: str, config: dict) -> int:
 
             tables = [
                 field.source_name
-                for field in t["parameters"]["source_to_target"]
+                for field in task.parameters["source_to_target"]
                 if field.source_name
                 and re.search(r"_tds_", field.source_name, re.IGNORECASE)
             ]
 
             pattern = r"(\w+_tds_\w+\.\w+)\."
-            for join in t["parameters"]["joins"]:
-                for condition in join.on:
+            if task.parameters["joins"]:
+                for join in task.parameters["joins"]:
+                    for condition in join.on:
+                        tables.extend(
+                            re.findall(
+                                pattern, " ".join(condition.fields), re.IGNORECASE
+                            )
+                        )
+            if task.parameters["where"]:
+                for condition in task.parameters["where"]:
                     tables.extend(
                         re.findall(pattern, " ".join(condition.fields), re.IGNORECASE)
                     )
-
-            for condition in t["parameters"]["where"]:
-                tables.extend(
-                    re.findall(pattern, " ".join(condition.fields), re.IGNORECASE)
-                )
 
             tables = set(tables)
 
@@ -87,8 +107,9 @@ def buildartifacts(logger: ILogger, output_directory: str, config: dict) -> int:
                 {
                     "object_name": table_definition,
                     "object_type": "type",
-                    "dataset_name": t["parameters"].get(
-                        "destination_dataset", config["properties"]["dataset_publish"]
+                    "dataset_name": ifnull(
+                        task.parameters["destination_dataset"],
+                        config["properties"]["dataset_publish"],
                     ),
                     "def_file": f"{table_definition}.json",
                 }
@@ -119,5 +140,5 @@ def buildartifacts(logger: ILogger, output_directory: str, config: dict) -> int:
                 f'table build config created "cfg_{table_definition}.json" - {pop_stack()}'
             )
 
-    logger.info(f"batch files {pop_stack()} COMPLETED SUCCESSFULLY".center(100, "-"))
+    logger.info(f"buildartifacts {pop_stack()} COMPLETED SUCCESSFULLY".center(100, "-"))
     return 0
