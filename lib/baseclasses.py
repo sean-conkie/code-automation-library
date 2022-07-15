@@ -245,9 +245,11 @@ class Field(object):
     def __init__(
         self,
         name: str = None,
+        data_type: str = None,
         source_column: str = None,
         source_name: str = None,
         transformation: str = None,
+        nullable: bool = None,
         pk: bool = None,
         hk: bool = None,
     ) -> None:
@@ -256,6 +258,8 @@ class Field(object):
         self._source_column = source_column
         self._source_name = source_name
         self._name = name
+        self._data_type = data_type
+        self._nullable = nullable
         self._pk = pk
         self._hk = hk
 
@@ -303,6 +307,26 @@ class Field(object):
         Sets the name
         """
         self._name = value
+
+    @property
+    def data_type(self) -> str:
+        """
+        It returns the data type of the object
+
+        Returns:
+          The data type of the variable.
+        """
+        return self._data_type
+
+    @data_type.setter
+    def data_type(self, value: str) -> None:
+        """
+        This function takes in a string and returns None
+
+        Args:
+          value (str): The value to be converted to the specified data type.
+        """
+        self._data_type = value
 
     @property
     def source_column(self) -> str:
@@ -354,6 +378,19 @@ class Field(object):
         Sets the transformation
         """
         self._transformation = value
+
+    @property
+    def nullable(self) -> bool:
+        if self._nullable is None:
+            return True
+        return self._nullable
+
+    @nullable.setter
+    def nullable(self, value: bool) -> None:
+        """
+        Sets the nullable
+        """
+        self._nullable = value
 
     @property
     def pk(self) -> bool:
@@ -636,7 +673,6 @@ class Analytic(object):
         self._default = value
 
 
-# > This class is used to create a SQL query that updates a target table with data from a source table
 class UpdateTask(object):
     def __init__(
         self,
@@ -1202,17 +1238,17 @@ def todict(obj, classkey=None):
 def converttoobj(
     input: Union[list, dict],
     conversiontype: ConversionType,
-) -> Union[Analytic, Delta, list[Join], list[Condition]]:
+) -> Union[Analytic, Delta, list[Join], list[Condition], list[Field]]:
     """
-    It takes a list or dictionary and converts it to a list of Join or Condition objects
+    It takes a list or dictionary and converts it to a list of Join, Condition, or Field objects
 
     Args:
-      input (Union[list, dict]): The input to be converted to the object.
-      conversiontype (ConversionType): The type of conversion you want to perform.
+      input (Union[list, dict]): The input to be converted.
+      conversiontype (ConversionType): The type of object you want to convert to.
 
     Returns:
-      Analytic, Delta, list[Join] or list[Condition] depending on the selected conversion
-      type
+      An object based on the conversiontype supplied (Analytic, Delta, list[Join], list[Condition],
+      list[Field])
     """
 
     if not input:
@@ -1318,9 +1354,11 @@ def converttoobj(
         obj = [
             Field(
                 name=field.get("name"),
+                data_type=field.get("data_type"),
                 source_column=field.get("source_column"),
                 source_name=field.get("source_name"),
                 transformation=field.get("transformation"),
+                nullable=field.get("nullable"),
                 pk=field.get("pk"),
                 hk=field.get("hk"),
             )
@@ -1337,7 +1375,3 @@ def converttoobj(
         ]
 
     return obj
-
-
-def lowercasereplace(match):
-    return match.group(1).lower()

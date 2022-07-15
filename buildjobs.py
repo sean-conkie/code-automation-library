@@ -4,6 +4,7 @@ import re
 import sys
 import traceback
 
+from lib.buildartifacts import buildartifacts
 from lib.buildbatch import buildbatch
 from lib.builddags import builddags
 from datetime import datetime
@@ -46,6 +47,8 @@ def main(logger: ILogger, args: argparse.Namespace) -> int:
                 sys.exit(1)
         else:
             logger.error(f"No job type supplied in {path}")
+
+        buildartifacts(logger, args.output_directory, config)
 
     return 0
 
