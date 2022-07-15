@@ -1,8 +1,9 @@
 #!/bin/bash
+# shellcheck disable=SC1000-SC9999
 ################################################################################
 #
 # filename      : pct_{{job_id}}.sh
-# author        : Code Generator
+# author        : {{ author }}
 # date created  : {{ created_date }}
 #
 ################################################################################
