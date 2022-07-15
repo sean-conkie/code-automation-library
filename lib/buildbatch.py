@@ -46,16 +46,14 @@ def buildbatch(logger: ILogger, output_directory: str, config: dict) -> int:
             t.get("task_id"),
             t.get("operator"),
             t.get("parameters"),
+            t.get("author"),
             t.get("dependencies"),
             t.get("description"),
         )
         logger.info(f'creating task "{task.task_id}" - {pop_stack()}')
         if task.operator == TaskOperator.CREATETABLE.name:
             # for each task, add a new one to config["tasks"] with data check tasks.
-            if (
-                "block_data_check" not in task.parameters.keys()
-                or not task.parameters["block_data_check"]
-            ):
+            if not task.parameters.get("block_data_check"):
                 data_check_tasks = create_data_check_tasks(
                     logger, task, config["properties"]
                 )
@@ -86,6 +84,7 @@ def buildbatch(logger: ILogger, output_directory: str, config: dict) -> int:
         scripts=format_description(" ".join(scripts), "", FileType.SH),
         cut=len(config.get("properties", {}).get("prefix") + "_") + 1,
         sub_process_list="\n".join(sub_process_list),
+        author=task.author,
     )
 
     scr_file = f"{output_directory}{config['name']}.sh"
@@ -98,6 +97,7 @@ def buildbatch(logger: ILogger, output_directory: str, config: dict) -> int:
     pct_output = pct_template.render(
         job_id=config.get("name", "").lower(),
         created_date=datetime.now().strftime("%d %b %Y"),
+        author=task.author,
     )
 
     pct_file = f"{output_directory}pct_{config['name']}.sh"
@@ -211,7 +211,7 @@ def create_table_task(logger: ILogger, task: Task, properties: dict) -> dict:
     logger.info(f"{pop_stack()} STARTED".center(100, "-"))
     dataset_staging = properties.get("dataset_staging")
 
-    if not "sql" in task.parameters.keys():
+    if not task.parameters.get("sql"):
         task.parameters["source_to_target"] = [
             field
             for field in task.parameters.get("source_to_target")

@@ -68,6 +68,7 @@ def create_sql_file(
         task_id=task.task_id,
         description=format_description(task.description, "Description", FileType.SQL),
         created_date=datetime.now().strftime("%d %b %Y"),
+        author=task.author,
     )
 
     sql_file = f"{file_path}{task.task_id}.sql"
@@ -99,7 +100,7 @@ def create_sql(logger: ILogger, task: Task, dataset_staging: str = None) -> str:
         task.parameters.get("driving_table"),
         converttoobj(task.parameters.get("source_to_target"), ConversionType.SOURCE),
         WriteDisposition[
-            task.parameters.get("write_disposition", "WRITE_TRUNCATE").upper()
+            task.parameters.get("write_disposition", "WRITETRUNCATE").upper()
         ],
         task.parameters.get("sql"),
         converttoobj(task.parameters.get("joins"), ConversionType.JOIN),
@@ -109,13 +110,16 @@ def create_sql(logger: ILogger, task: Task, dataset_staging: str = None) -> str:
         dataset_staging,
         converttoobj(task.parameters.get("history"), ConversionType.ANALYTIC),
         task.parameters.get("block_data_check"),
+        task.parameters.get("build_artifacts"),
     )
 
     sqltask = SQLTask(
         copy.copy(task.task_id),
         TaskOperator[task.operator],
         params,
+        copy.copy(task.author),
         copy.deepcopy(task.dependencies),
+        copy.copy(task.description),
     )
 
     logger.info(
@@ -294,11 +298,17 @@ def create_type_1_sql(
             re.MULTILINE,
         )
     else:
-        wtask.parameters.source_to_target.append(
+        dw_index = 1
+        for i, field in enumerate(wtask.parameters.source_to_target):
+            if not field.pk:
+                dw_index = i
+                break
+        wtask.parameters.source_to_target.insert(
+            dw_index,
             Field(
                 transformation=f"current_timestamp()",
                 name="dw_last_modified_dt",
-            )
+            ),
         )
 
     sql = [
@@ -810,27 +820,18 @@ def create_table_query(
     # original
     wtask = copy.deepcopy(task)
 
-    join_char = ",\n"
-    # we need to create a list of insert columns for insert into statements
-    # as we can't run a check on the ordering of the columns in BigQuery to compare
-    # to the config.
-    insert_columns = [
-        f"{'       ' if i > 0 else ''}{c.name}"
-        for i, c in enumerate(wtask.parameters.source_to_target)
-    ]
-    table_operation_suffix = f"({join_char.join(insert_columns)})"
-
-    if wtask.parameters.write_disposition == WriteDisposition.WRITEAPPEND:
-        table_operation = "insert into"
-    elif wtask.parameters.write_disposition == WriteDisposition.WRITETRUNCATE:
-        table_operation = f"""truncate table {wtask.parameters.destination_dataset}.{wtask.parameters.destination_table}; 
-insert into"""
-    elif wtask.parameters.write_disposition == WriteDisposition.WRITETRANSIENT:
-        table_operation = f"create or replace table"
-        table_operation_suffix = "as"
+    # write truncate disposition from config is translated to a truncate statement followed
+    # by an append.
+    if wtask.parameters.write_disposition == WriteDisposition.WRITETRUNCATE:
+        sql.extend(
+            [
+                f"{wtask.parameters.destination_dataset}.{wtask.parameters.destination_table}:DELETE:",
+                f"truncate table {wtask.parameters.destination_dataset}.{wtask.parameters.destination_table};",
+            ]
+        )
 
     sql.append(
-        f"{table_operation} {wtask.parameters.destination_dataset}.{wtask.parameters.destination_table} {table_operation_suffix} "
+        f"{wtask.parameters.destination_dataset}.{wtask.parameters.destination_table}:{wtask.parameters.write_disposition.value}:"
     )
 
     tables, frm, where = itemgetter("tables", "from", "where")(
@@ -938,7 +939,7 @@ def create_sql_select(logger: ILogger, task: SQLTask, tables: dict) -> str:
                     1 + len(column.name),
                 )
             )
-            if column.name != column.source_column
+            if column.name != column.source_column or column.transformation
             else ""
         )
 

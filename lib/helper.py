@@ -79,7 +79,7 @@ class FileType(Enum):
     SQL = 2
 
 
-def format_description(description: str, section: str, target_type: FileType):
+def format_description(description: str, section: str, target_type: FileType) -> str:
     """
     It takes a string, and returns a string
 
@@ -110,7 +110,7 @@ def format_description(description: str, section: str, target_type: FileType):
         lines = []
         line = [first_line_prefix]
         line_length = 80
-        line_length_cnt = 20
+        line_length_cnt = len(first_line_prefix)
         for word in m:
             if (line_length_cnt + len(word) + len(line)) < line_length:
                 line.append(word)
@@ -119,6 +119,9 @@ def format_description(description: str, section: str, target_type: FileType):
                 lines.append(line)
                 line = [line_prefix, word.strip()]
                 line_length_cnt = len(word) + 20
+
+        if not line in lines:
+            lines.append(line)
 
         joined_lines = []
         for line in lines:

@@ -1,3 +1,4 @@
+import json
 import re
 
 from enum import Enum
@@ -72,8 +73,9 @@ class JoinType(Enum):
 
 class WriteDisposition(Enum):
     WRITEAPPEND = "WRITE_APPEND"
-    WRITETRANSIENT = "WRITE_TRANSIENT"
-    WRITETRUNCATE = "WRITE_TRUNCATE"
+    WRITETRANSIENT = "WRITE_TRUNCATE"
+    WRITETRUNCATE = "WRITE_APPEND"
+    DELETE = "DELETE"
 
 
 class TaskOperator(Enum):
@@ -411,17 +413,19 @@ class Task(object):
         task_id: str,
         operator: str,
         parameters: dict,
+        author: str,
         dependencies: list[str] = [],
-        description=None
+        description=None,
     ) -> None:
         self._task_id = task_id
         self._operator = operator
         self._parameters = parameters
         self._dependencies = dependencies
         self._description = description
+        self._author = author
 
     def __str__(self) -> str:
-        return str(todict(self))
+        return json.dumps(todict(self), indent=4, sort_keys=True)
 
     def __repr__(self):
         return str(self)
@@ -432,13 +436,23 @@ class Task(object):
         Returns the task_id
         """
         return self._task_id
-    
+
     @property
     def description(self) -> str:
         """
         Returns the description
         """
         return self._description
+
+    @property
+    def author(self) -> str:
+        """Returns the author"""
+        return self._author
+
+    @author.setter
+    def author(self, value: str) -> None:
+        """Sets the author"""
+        self._author = value
 
     @property
     def operator(self) -> str:
@@ -764,6 +778,7 @@ class SQLParameter(object):
         staging_dataset: str = None,
         history: Analytic = None,
         block_data_check: bool = False,
+        build_artifacts: bool = True,
     ) -> None:
         self._block_data_check = block_data_check
         self._destination_table = destination_table
@@ -778,6 +793,7 @@ class SQLParameter(object):
         self._destination_dataset = destination_dataset
         self._staging_dataset = staging_dataset
         self._history = history
+        self._build_artifacts = build_artifacts
 
     def __str__(self) -> str:
         return str(todict(self))
@@ -796,14 +812,14 @@ class SQLParameter(object):
         self._block_data_check = value
 
     @property
-    def destination_table(self) -> str:
-        """Returns the destination_table"""
-        return self._destination_table
+    def build_artifacts(self) -> bool:
+        """Returns the build_artifacts"""
+        return self._build_artifacts
 
-    @destination_table.setter
-    def destination_table(self, value: str) -> None:
-        """Sets the destination_table"""
-        self._destination_table = value
+    @build_artifacts.setter
+    def build_artifacts(self, value: bool) -> None:
+        """Sets the build_artifacts"""
+        self.build_artifacts = value
 
     @property
     def target_type(self) -> TableType:
@@ -896,6 +912,16 @@ class SQLParameter(object):
         self._destination_dataset = value
 
     @property
+    def destination_table(self) -> str:
+        """Returns the destination_table"""
+        return self._destination_table
+
+    @destination_table.setter
+    def destination_table(self, value: str) -> None:
+        """Sets the destination_table"""
+        self._destination_table = value
+
+    @property
     def staging_dataset(self) -> str:
         """Returns the staging_dataset"""
         return self._staging_dataset
@@ -922,10 +948,23 @@ class SQLTask(Task):
         task_id: str,
         operator: TaskOperator,
         parameters: SQLParameter,
+        author: str,
         dependencies: list[str] = [],
-        description=None
+        description=None,
     ) -> None:
-        super().__init__(task_id, operator, parameters, dependencies, description)
+        super().__init__(
+            task_id, operator, parameters, author, dependencies, description
+        )
+
+    @property
+    def author(self) -> str:
+        """Returns the author"""
+        return self._author
+
+    @author.setter
+    def author(self, value: str) -> None:
+        """Sets the author"""
+        self._author = value
 
     @property
     def operator(self) -> TaskOperator:
@@ -1298,3 +1337,7 @@ def converttoobj(
         ]
 
     return obj
+
+
+def lowercasereplace(match):
+    return match.group(1).lower()
