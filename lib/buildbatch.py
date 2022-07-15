@@ -1,10 +1,3 @@
-import argparse
-import black
-import os
-import pathlib
-
-from django import conf
-
 from lib.baseclasses import (
     TableType,
     TaskOperator,
@@ -13,13 +6,11 @@ from lib.baseclasses import (
     SQLDataCheckParameter,
     todict,
 )
-
 from datetime import datetime
 from jinja2 import Environment, FileSystemLoader
 from lib.helper import FileType, format_description
 from lib.logger import ILogger, pop_stack
 from lib.sql_helper import create_sql_file
-from shutil import copy
 
 __all__ = [
     "buildbatch",

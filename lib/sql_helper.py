@@ -2,7 +2,6 @@ import copy
 import re
 
 from datetime import datetime
-from enum import Enum
 from jinja2 import Environment, FileSystemLoader
 from lib.baseclasses import (
     Analytic,
