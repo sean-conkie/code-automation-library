@@ -17,7 +17,20 @@ __all__ = [
 ]
 
 
-def buildbatch(logger: ILogger, output_directory: str, config: dict) -> int:
+def buildbatch(logger: ILogger, args: dict, config: dict) -> int:
+    """
+    The function takes a logger, a dictionary of arguments and a dictionary of configuration and returns
+    an integer
+
+    Args:
+      logger (ILogger): ILogger - this is the logger object that is used to log messages to the console
+    and to the log file.
+      args (dict): the command line arguments
+      config (dict): the JSON file that contains the configuration for the batch file
+
+    Returns:
+      0
+    """
 
     logger.info(f"batch files - {pop_stack()} STARTED".center(100, "-"))
 
@@ -53,7 +66,7 @@ def buildbatch(logger: ILogger, output_directory: str, config: dict) -> int:
                         config["tasks"].append(d)
 
         sub_process_list.append(
-            create_table_task(logger, task, config.get("properties"))
+            create_table_task(logger, task, config.get("properties"), args)
         )
         tasks.append(task.task_id)
         scripts.append(f"{task.task_id}.sql")
@@ -78,7 +91,7 @@ def buildbatch(logger: ILogger, output_directory: str, config: dict) -> int:
         author=task.author,
     )
 
-    scr_file = f"{output_directory}{config['name']}.sh"
+    scr_file = f"{args.get('batch_scr')}{config['name']}.sh"
     with open(scr_file, "w") as outfile:
         outfile.write(scr_output)
 
@@ -91,7 +104,7 @@ def buildbatch(logger: ILogger, output_directory: str, config: dict) -> int:
         author=task.author,
     )
 
-    pct_file = f"{output_directory}pct_{config['name']}.sh"
+    pct_file = f"{args.get('batch_scr')}pct_{config['name']}.sh"
     with open(pct_file, "w") as outfile:
         outfile.write(pct_output)
 
@@ -189,14 +202,25 @@ def create_data_check_tasks(logger: ILogger, task: Task, properties: dict) -> li
     return data_check_tasks
 
 
-def create_table_task(logger: ILogger, task: Task, properties: dict) -> dict:
+def create_table_task(
+    logger: ILogger,
+    task: Task,
+    properties: dict,
+    args: dict,
+) -> dict:
     """
-    It creates a SQL file that creates a table in the destination dataset
+    It creates a SQL file for the task, and returns a string that will be used to create a SQL file for
+    the batch
 
     Args:
-      logger (ILogger): ILogger - this is the logger that is passed in from the main function.
-      task (Task): the task object
-      properties (dict): a dictionary of properties that are used in the script.
+      logger (ILogger): ILogger - this is the logger object that is passed to the function.
+      task (Task): The task object that is being processed.
+      properties (dict): This is a dictionary of all the properties that are defined in the properties
+    file.
+      args (dict): This is the dictionary of arguments passed to the script.
+
+    Returns:
+      The task_id is being returned.
     """
 
     logger.info(f"{pop_stack()} STARTED".center(100, "-"))
@@ -208,7 +232,12 @@ def create_table_task(logger: ILogger, task: Task, properties: dict) -> dict:
             for field in task.parameters.get("source_to_target")
             if not field.get("name") in ["dw_created_dt", "dw_last_modified_dt"]
         ]
-        create_sql_file(logger, task, dataset_staging=dataset_staging)
+        create_sql_file(
+            logger,
+            task,
+            file_path=args.get("batch_sql"),
+            dataset_staging=dataset_staging,
+        )
 
     outp = f"'{task.task_id.replace(properties.get('prefix','') + '_', '').upper()}|{task.task_id.replace(properties.get('prefix','') + '_', '')}|Y'\\"
 

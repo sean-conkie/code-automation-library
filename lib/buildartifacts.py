@@ -10,8 +10,20 @@ __all__ = [
 ]
 
 
-def buildartifacts(logger: ILogger, output_directory: str, config: dict) -> int:
-
+def buildartifacts(logger: ILogger, args: dict, config: dict) -> int:
+    """
+    This function creates the table definition and table build config files for the objects defined in
+    the config file
+    
+    Args:
+      logger (ILogger): ILogger - this is the logger object that is used to log messages to the console
+    and to the log file.
+      args (dict): The command line arguments passed to the script.
+      config (dict): The configuration file that was passed in.
+    
+    Returns:
+      The return value is the exit code of the function.
+    """
     logger.info(f"buildartifacts - {pop_stack()} STARTED".center(100, "-"))
 
     # for config file provided use the content of the JSON to create
@@ -72,7 +84,9 @@ def buildartifacts(logger: ILogger, output_directory: str, config: dict) -> int:
                 for field in task.parameters["source_to_target"]
             ]
             table_definition = task.parameters["destination_table"]
-            with open(f"{output_directory}{table_definition}.json", "w") as outfile:
+            with open(
+                f"{args.get('table_def_file')}{table_definition}.json", "w"
+            ) as outfile:
                 outfile.write(json.dumps(table_def_content))
 
             logger.info(
@@ -133,7 +147,9 @@ def buildartifacts(logger: ILogger, output_directory: str, config: dict) -> int:
                 ]
             )
 
-            with open(f"{output_directory}cfg_{table_definition}.json", "w") as outfile:
+            with open(
+                f"{args.get('table_cfg')}cfg_{table_definition}.json", "w"
+            ) as outfile:
                 outfile.write(json.dumps(table_build_config))
 
             logger.info(
