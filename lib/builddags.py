@@ -159,7 +159,7 @@ def builddags(logger: ILogger, args: dict, config: dict) -> int:
         output.replace("'", '"'), fast=False, mode=black.FileMode()
     )
 
-    dag_file = os.path.join(args.get('dag'), f"{config['name']}.py")
+    dag_file = os.path.join(args.get("dag"), f"{config['name']}.py")
     with open(dag_file, "w") as outfile:
         outfile.write(reformatted)
 
