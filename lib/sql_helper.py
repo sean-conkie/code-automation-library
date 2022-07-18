@@ -1,4 +1,5 @@
 import copy
+import os
 import re
 
 from datetime import datetime
@@ -70,7 +71,7 @@ def create_sql_file(
         author=task.author,
     )
 
-    sql_file = f"{file_path}{task.task_id}.sql"
+    sql_file = os.path.join(file_path, f"{task.task_id}.sql")
     with open(sql_file, "w") as outfile:
         outfile.write(output)
 
@@ -306,6 +307,7 @@ def create_type_1_sql(
             dw_index,
             Field(
                 transformation=f"current_timestamp()",
+                data_type="TIMESTAMP",
                 name="dw_last_modified_dt",
             ),
         )
@@ -427,12 +429,14 @@ def create_delta_comparisons(logger: ILogger, task: SQLTask) -> list[str]:
     iitask.parameters.source_to_target.append(
         Field(
             transformation=f"current_timestamp()",
+            data_type="TIMESTAMP",
             name="dw_created_dt",
         )
     )
     iitask.parameters.source_to_target.append(
         Field(
             transformation=f"current_timestamp()",
+            data_type="TIMESTAMP",
             name="dw_last_modified_dt",
         )
     )
@@ -471,7 +475,11 @@ def create_delta_comparisons(logger: ILogger, task: SQLTask) -> list[str]:
         ]
 
     source_to_target.append(
-        Field("dw_last_modified_dt", transformation="current_timestamp()")
+        Field(
+            "dw_last_modified_dt",
+            data_type="TIMESTAMP",
+            transformation="current_timestamp()",
+        )
     )
 
     update_conditions = [
@@ -706,6 +714,7 @@ def create_type_2_sql(
         td_task.parameters.source_to_target.append(
             Field(
                 transformation=f"current_timestamp()",
+                data_type="TIMESTAMP",
                 name="dw_last_modified_dt",
             )
         )

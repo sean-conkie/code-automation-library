@@ -35,7 +35,7 @@ def main(logger: ILogger, args: dict) -> int:
     # for each config file identified use the content of the JSON to create
     # the python statements needed to be inserted into the template
     for config in config_list:
-        path = config if os.path.exists(config) else f"{dpath}{config}"
+        path = config if os.path.exists(config) else os.path.join(dpath, config)
         cfg = get_json(logger, path)
         job_type = cfg.get("type")
         if job_type == "DAG":
@@ -66,20 +66,21 @@ def create_parameters(path: str = None) -> dict:
       A dictionary of parameters
     """
 
-    logger.info(f"{pop_stack()} - STARTED".center(100, "-"))
-
-    logger.info(f"opening script config {path}")
-    if not os.path.exists(path):
+    if path and not os.path.exists(path):
         raise FileNotFoundError
 
     cfg = get_json(logger, path) if path else {}
 
-    log_default = ifnull(os.environ.get("SYS_LOG"), "./logs/")
+    log_default = ifnull(os.environ.get("SYS_LOG"), "./batch_application/logs/")
     config_default = "./bq_application/job/"
     dag_default = "./dags/"
     dag_sql_default = "./dags/sql/"
-    batch_scr_default = ifnull(os.environ.get("SYS_SCR"), "./batch_application/scr/")
-    batch_sql_default = ifnull(os.environ.get("SYS_LOG"), "./batch_application/sql/")
+    batch_scr_default = ifnull(
+        os.environ.get("SYS_SCR"), "./batch_application/scripts/scr/"
+    )
+    batch_sql_default = ifnull(
+        os.environ.get("SYS_LOG"), "./batch_application/scripts/sql/"
+    )
     table_def_file_default = "./bq_application/table/"
     table_cfg_default = "./bq_application/cfg/"
     project_id = os.environ.get("PROJECT_ID")
@@ -96,9 +97,8 @@ def create_parameters(path: str = None) -> dict:
         ),
         "table_cfg": os.path.normpath(cfg.get("table_cfg", table_cfg_default)),
         "project_id": cfg.get("logs", project_id),
+        "debug_level": cfg.get("debug_level", "DEBUG"),
     }
-
-    logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100, "-"))
     return parameters
 
 
@@ -114,10 +114,12 @@ if __name__ == "__main__":
     known_args, args = parser.parse_known_args()
     parameters = create_parameters(known_args.config_path)
 
-    log_file_name = os.path.normpath(
-        f'{parameters.get("log")}buildjobs_{datetime.now().strftime("%Y-%m-%dT%H%M%S")}.log'
+    log_file_name = os.path.join(
+        parameters.get("log"),
+        f'buildjobs_{datetime.now().strftime("%Y-%m-%dT%H%M%S")}.log',
     )
-    logger = ILogger("buildjobs", log_file_name, known_args.level)
+
+    logger = ILogger("buildjobs", log_file_name, parameters.get("debug_level"))
 
     try:
         main(logger, parameters)

@@ -1,3 +1,6 @@
+import os
+import re
+
 from lib.baseclasses import (
     TableType,
     TaskOperator,
@@ -87,11 +90,16 @@ def buildbatch(logger: ILogger, args: dict, config: dict) -> int:
         description=format_description(task.description, "Description", FileType.SH),
         scripts=format_description(" ".join(scripts), "", FileType.SH),
         cut=len(config.get("properties", {}).get("prefix") + "_") + 1,
-        sub_process_list="\n".join(sub_process_list),
+        sub_process_list=re.sub(
+            r"(\\$(?!\n))",
+            "",
+            "\n".join(sub_process_list),
+            re.IGNORECASE,
+        ),
         author=task.author,
     )
 
-    scr_file = f"{args.get('batch_scr')}{config['name']}.sh"
+    scr_file = os.path.join(args.get("batch_scr"), f"{config['name']}.sh")
     with open(scr_file, "w") as outfile:
         outfile.write(scr_output)
 
@@ -104,7 +112,7 @@ def buildbatch(logger: ILogger, args: dict, config: dict) -> int:
         author=task.author,
     )
 
-    pct_file = f"{args.get('batch_scr')}pct_{config['name']}.sh"
+    pct_file = os.path.join(args.get("batch_scr"), f"pct_{config['name']}.sh")
     with open(pct_file, "w") as outfile:
         outfile.write(pct_output)
 

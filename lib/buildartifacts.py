@@ -1,4 +1,5 @@
 import json
+import os
 import re
 
 from lib.baseclasses import converttoobj, ConversionType, Field, Task
@@ -14,13 +15,13 @@ def buildartifacts(logger: ILogger, args: dict, config: dict) -> int:
     """
     This function creates the table definition and table build config files for the objects defined in
     the config file
-    
+
     Args:
       logger (ILogger): ILogger - this is the logger object that is used to log messages to the console
     and to the log file.
       args (dict): The command line arguments passed to the script.
       config (dict): The configuration file that was passed in.
-    
+
     Returns:
       The return value is the exit code of the function.
     """
@@ -85,7 +86,8 @@ def buildartifacts(logger: ILogger, args: dict, config: dict) -> int:
             ]
             table_definition = task.parameters["destination_table"]
             with open(
-                f"{args.get('table_def_file')}{table_definition}.json", "w"
+                os.path.join(args.get("table_def_file"), f"{table_definition}.json"),
+                "w",
             ) as outfile:
                 outfile.write(json.dumps(table_def_content))
 
@@ -138,7 +140,18 @@ def buildartifacts(logger: ILogger, args: dict, config: dict) -> int:
                         "def_file": "select_all_from_tab.sql",
                         "src_env_override": True,
                         "query_vars": [
-                            {"project_id": config["properties"]["project_id"]},
+                            {
+                                "project_id": re.sub(
+                                    r"(-\w+$)",
+                                    "-ENV",
+                                    task.parameters.get(
+                                        "source_project_override", {}
+                                    ).get(
+                                        table, config["properties"]["source_project"]
+                                    ),
+                                    re.IGNORECASE,
+                                )
+                            },
                             {"data_set": table.split(".")[0]},
                             {"table_name": table.split(".")[1]},
                         ],
@@ -148,7 +161,7 @@ def buildartifacts(logger: ILogger, args: dict, config: dict) -> int:
             )
 
             with open(
-                f"{args.get('table_cfg')}cfg_{table_definition}.json", "w"
+                os.path.join(args.get("table_cfg"), f"cfg_{table_definition}.json"), "w"
             ) as outfile:
                 outfile.write(json.dumps(table_build_config))
 
