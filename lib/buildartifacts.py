@@ -56,6 +56,8 @@ def buildartifacts(logger: ILogger, args: dict, config: dict) -> int:
             dw_index,
             Field(
                 name="dw_last_modified_dt",
+                data_type="TIMESTAMP",
+                nullable=False,
             ),
         )
 
@@ -64,6 +66,8 @@ def buildartifacts(logger: ILogger, args: dict, config: dict) -> int:
                 dw_index,
                 Field(
                     name="dw_created_dt",
+                    data_type="TIMESTAMP",
+                    nullable=False,
                 ),
             )
 
