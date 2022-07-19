@@ -42,7 +42,7 @@ Parameters can be provided for the job build script, primarily to define output 
 |`debug_level`|Specify the desired log level (default: DEBUG).  This can be one of the following: 'CRITICAL', 'DEBUG', 'ERROR', 'FATAL','INFO','NOTSET', 'WARNING'|`DEBUG`|
 
 Run script
-```
+```shell
 python ./buildjobs.py --config=./job_params.json
 ```
 
@@ -58,6 +58,6 @@ Script `validatedagconfig.py` can be used to validate that configs being process
 |`log_directory`|Specify the desired output directory for logs.  No dir means no log file will be output.|
 
 Run validation 
-```
+```shell
 python validatedagconfig.py --config_directory=./cfg --log_level="ERROR"
 ```
