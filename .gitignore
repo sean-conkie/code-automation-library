@@ -3,7 +3,8 @@
 __pycache__/
 *data/*
 /.vscode/
-logs/*
+**/logs/*
 
 # files
+*.log
 *.zip

@@ -1,4 +1,5 @@
 import json
+import os
 import re
 
 from lib.baseclasses import converttoobj, ConversionType, Field, Task
@@ -10,8 +11,20 @@ __all__ = [
 ]
 
 
-def buildartifacts(logger: ILogger, output_directory: str, config: dict) -> int:
+def buildartifacts(logger: ILogger, args: dict, config: dict) -> int:
+    """
+    This function creates the table definition and table build config files for the objects defined in
+    the config file
 
+    Args:
+      logger (ILogger): ILogger - this is the logger object that is used to log messages to the console
+    and to the log file.
+      args (dict): The command line arguments passed to the script.
+      config (dict): The configuration file that was passed in.
+
+    Returns:
+      The return value is the exit code of the function.
+    """
     logger.info(f"buildartifacts - {pop_stack()} STARTED".center(100, "-"))
 
     # for config file provided use the content of the JSON to create
@@ -43,6 +56,8 @@ def buildartifacts(logger: ILogger, output_directory: str, config: dict) -> int:
             dw_index,
             Field(
                 name="dw_last_modified_dt",
+                data_type="TIMESTAMP",
+                nullable=False,
             ),
         )
 
@@ -51,6 +66,8 @@ def buildartifacts(logger: ILogger, output_directory: str, config: dict) -> int:
                 dw_index,
                 Field(
                     name="dw_created_dt",
+                    data_type="TIMESTAMP",
+                    nullable=False,
                 ),
             )
 
@@ -72,7 +89,10 @@ def buildartifacts(logger: ILogger, output_directory: str, config: dict) -> int:
                 for field in task.parameters["source_to_target"]
             ]
             table_definition = task.parameters["destination_table"]
-            with open(f"{output_directory}{table_definition}.json", "w") as outfile:
+            with open(
+                os.path.join(args.get("table_def_file"), f"{table_definition}.json"),
+                "w",
+            ) as outfile:
                 outfile.write(json.dumps(table_def_content))
 
             logger.info(
@@ -124,7 +144,18 @@ def buildartifacts(logger: ILogger, output_directory: str, config: dict) -> int:
                         "def_file": "select_all_from_tab.sql",
                         "src_env_override": True,
                         "query_vars": [
-                            {"project_id": config["properties"]["project_id"]},
+                            {
+                                "project_id": re.sub(
+                                    r"(-\w+$)",
+                                    "-ENV",
+                                    task.parameters.get(
+                                        "source_project_override", {}
+                                    ).get(
+                                        table, config["properties"]["source_project"]
+                                    ),
+                                    re.IGNORECASE,
+                                )
+                            },
                             {"data_set": table.split(".")[0]},
                             {"table_name": table.split(".")[1]},
                         ],
@@ -133,7 +164,9 @@ def buildartifacts(logger: ILogger, output_directory: str, config: dict) -> int:
                 ]
             )
 
-            with open(f"{output_directory}cfg_{table_definition}.json", "w") as outfile:
+            with open(
+                os.path.join(args.get("table_cfg"), f"cfg_{table_definition}.json"), "w"
+            ) as outfile:
                 outfile.write(json.dumps(table_build_config))
 
             logger.info(

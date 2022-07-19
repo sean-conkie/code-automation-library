@@ -21,18 +21,18 @@ __all__ = [
 ]
 
 
-def builddags(logger: ILogger, output_directory: str, config: dict) -> int:
+def builddags(logger: ILogger, args: dict, config: dict) -> int:
     """
-    > The function takes a JSON file as input, and creates a DAG file as output
+    The function takes a JSON file as input, and creates a DAG file for each DAG in the JSON file
 
     Args:
       logger (ILogger): ILogger - this is the logger object that is used to log messages to the console
     and to the log file.
-      args (argparse.Namespace): argparse.Namespace
-      config (dict): The configuration file that contains the DAG definition.
+      args (dict): the command line arguments
+      config (dict): The configuration file that is being used to build the DAG.
 
     Returns:
-      The return value is the exit code of the function.
+      0
     """
 
     logger.info(f"dag files - {pop_stack()} STARTED".center(100, "-"))
@@ -159,7 +159,7 @@ def builddags(logger: ILogger, output_directory: str, config: dict) -> int:
         output.replace("'", '"'), fast=False, mode=black.FileMode()
     )
 
-    dag_file = f"{output_directory}{config['name']}.py"
+    dag_file = os.path.join(args.get("dag"), f"{config['name']}.py")
     with open(dag_file, "w") as outfile:
         outfile.write(reformatted)
 
@@ -355,14 +355,17 @@ def create_gcs_load_task(logger: ILogger, task: Task, properties: dict) -> dict:
     return outp
 
 
-def create_table_task(logger: ILogger, task: Task, properties: dict) -> dict:
+def create_table_task(
+    logger: ILogger, task: Task, properties: dict, args: dict
+) -> dict:
     """
     This function creates a table in the publish dataset using the sql file created in the previous step
 
     Args:
       logger (ILogger): ILogger - this is the logger object that is passed to the function.
-      task (Task): the task object from the task file
-      properties (dict): a dictionary of properties that are used in the pipeline.
+      task (Task): the task object from the DAG
+      properties (dict): a dictionary of properties from the target file
+      args (dict): The arguments passed to the DAG.
 
     Returns:
       A dictionary with the following keys:
@@ -395,7 +398,9 @@ def create_table_task(logger: ILogger, task: Task, properties: dict) -> dict:
             for field in task.parameters["source_to_target"]
             if not field["name"] in ["dw_created_dt", "dw_last_modified_dt"]
         ]
-        file_path = create_sql_file(logger, task, dataset_staging=dataset_staging)
+        file_path = create_sql_file(
+            logger, task, file_path=args.get("dag_sql"), dataset_staging=dataset_staging
+        )
         sql = f"{file_path.replace('./','')}"
 
     write_disposition = (
