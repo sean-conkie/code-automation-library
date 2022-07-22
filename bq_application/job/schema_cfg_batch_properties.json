@@ -1,0 +1,35 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema",
+  "$id": "schema_cfg_batch_properties.json",
+  "type": "object",
+  "title": "Defines the desired properties",
+  "required": [
+    "prefix",
+    "source_project"
+  ],
+  "properties": {
+    "prefix": {
+      "type": "string",
+      "title": "The prefix applied to job sub-processes, will be removed by scripts during job execution",
+      "examples": [
+        "spine_order"
+      ]
+    },
+    "dataset_staging": {
+      "type": "string",
+      "title": "The staging dataset used during transformations"
+    },
+    "dataset_source": {
+      "type": "string",
+      "title": "The primary source dataset, default for all job tasks"
+    },
+    "dataset_publish": {
+      "type": "string",
+      "title": "The primary target dataset, default for all job tasks"
+    },
+    "source_project": {
+      "type": "string",
+      "title": "The project containing source tables"
+    }
+  }
+}

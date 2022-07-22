@@ -1,13 +1,14 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema",
-  "$id": "dag_cfg_schema.json",
+  "$id": "schema_cfg_createtable_task.json",
   "type": "object",
   "title": "Defines the desired task",
   "required": [
     "task_id",
     "operator",
     "parameters",
-    "dependencies"
+    "dependencies",
+    "author"
   ],
   "properties": {
     "task_id": {
@@ -21,17 +22,24 @@
       "type": "string",
       "title": "The name of the target operator, can be any standard operator or custom operator.",
       "examples": [
-        "CreateTable",
-        "BigQueryOperator"
+        "CREATETABLE"
       ]
     },
     "parameters": {
       "type": "object",
       "title": "Operator parameters, each operator will have it's own list of required parameters.",
       "properties": {
+        "source_project_override": {
+          "type": "object",
+          "title": "Object containing key: value pair of table and source project name"
+        },
         "block_data_check": {
           "type": "boolean",
           "title": "Defines if data check tasks should be created, where false or None then data check tasks will be generated."
+        },
+        "build_artifacts": {
+          "type": "boolean",
+          "title": "Defines if task artifacts (table def etc) should be created."
         },
         "destination_table": {
           "type": "string",
@@ -41,11 +49,10 @@
           ]
         },
         "target_type": {
-          "type": "number",
+          "type": "string",
           "title": "The SCD type of the target schema.",
           "examples": [
-            1,
-            2
+            "TYPE1"
           ]
         },
         "driving_table": {
@@ -53,6 +60,13 @@
           "title": "The driving table for the transformation.",
           "examples": [
             "uk_tds_refdata_eod_is.cc_refdata_bsboffertooffertype"
+          ]
+        },
+        "staging_dataset": {
+          "type": "string",
+          "title": "The staging dataset used for the transformation.",
+          "examples": [
+            "uk_pre_cust_spine_subs_is"
           ]
         },
         "joins": {
@@ -155,24 +169,19 @@
             ],
             "properties": {
               "name": {
-                "type": "string",
+                "type": ["string", "null"],
                 "title": "The target column name"
               },
               "source_column": {
-                "type": "string",
+                "type": ["string", "null"],
                 "title": "(Conditional - source_column OR transformation) The source column name"
               },
               "transformation": {
-                "type": "string",
-                "title": "(Conditional - source_column OR transformation) Defines the transformation of the column, not including joins.",
-                "examples": [
-                  "current_timestamp()",
-                  "ifnull(uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer.statuschangeddate,uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer.effective_from_dt)",
-                  "abs(uk_tds_chordiant_eod_is.cc_chordiant_bsbpriceableunit.quotedprice)"
-                ]
+                "type": ["string", "null"],
+                "title": "(Conditional - source_column OR transformation) Defines the transformation of the column, not including joins."
               },
               "source_name": {
-                "type": "string",
+                "type": ["string", "null"],
                 "title": "(Optional) The source table name - defaults to driving_table"
               },
               "pk": {
@@ -183,17 +192,7 @@
                 "type": "boolean",
                 "title": "Indicates field is part of the 'history' key, which defines the object history is tracked on."
               }
-            },
-            "examples": [{
-                "name": "code",
-                "source_name": "uk_tds_refdata_eod_is.cc_refdata_bsboffertype",
-                "source_column": "code"
-              },
-              {
-                "name": "effective_from_dt",
-                "transformation": "ifnull(uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer.statuschangeddate,uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer.effective_from_dt)"
-              }
-            ]
+            }
           }
         },
         "where": {
@@ -236,14 +235,7 @@
                     "title": "A field or value"
                   }
                 }
-              },
-              "examples": [{
-                "operator": "=",
-                "fields": [
-                  "uk_tds_refdata_eod_is.cc_refdata_bsboffertooffertype.offertypeid",
-                  "uk_tds_refdata_eod_is.cc_refdata_bsboffertype.id"
-                ]
-              }]
+              }
             }
           }
         },
@@ -260,11 +252,11 @@
               "title": "The field that date condition is to be applied to",
               "properties": {
                 "source_column": {
-                  "type": "string",
+                  "type": ["string", "null"],
                   "title": "(Conditional - source_column OR transformation) The source column name"
                 },
                 "transformation": {
-                  "type": "string",
+                  "type": ["string", "null"],
                   "title": "(Conditional - source_column OR transformation) Defines the transformation of the column, not including joins.",
                   "examples": [
                     "current_timestamp()",
@@ -273,7 +265,7 @@
                   ]
                 },
                 "source_name": {
-                  "type": "string",
+                  "type": ["string", "null"],
                   "title": "(Optional) The source table name - defaults to driving_table"
                 }
               }
@@ -311,12 +303,12 @@
                 ],
                 "properties": {
                   "source_column": {
-                    "type": "string",
+                    "type": ["string", "null"],
                     "default": "",
                     "title": "The source column"
                   },
                   "source_name": {
-                    "type": "string",
+                    "type": ["string", "null"],
                     "default": "",
                     "title": "(Optional) The source table name, defaults to driving table."
                   }
@@ -336,25 +328,20 @@
                 ],
                 "properties": {
                   "name": {
-                    "type": "string",
+                    "type": ["string", "null"],
                     "title": "The target name of the analycit result"
                   },
                   "source_column": {
-                    "type": "string",
+                    "type": ["string", "null"],
                     "title": "The source column"
                   },
                   "source_name": {
-                    "type": "string",
+                    "type": ["string", "null"],
                     "title": "(Optional) The source table name, driving table used as default"
                   },
                   "transformation": {
-                    "type": "string",
-                    "title": "(Conditional - source_column OR transformation) Defines the transformation of the column, not including joins.",
-                    "examples": [
-                      "current_timestamp()",
-                      "ifnull(uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer.statuschangeddate,uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer.effective_from_dt)",
-                      "abs(uk_tds_chordiant_eod_is.cc_chordiant_bsbpriceableunit.quotedprice)"
-                    ]
+                    "type": ["string", "null"],
+                    "title": "(Conditional - source_column OR transformation) Defines the transformation of the column, not including joins."
                   }
                 }
               }
@@ -368,7 +355,7 @@
                 "title": "A column - can be a column or transformation",
                 "properties": {
                   "transformation": {
-                    "type": "string",
+                    "type": ["string", "null"],
                     "default": "",
                     "title": "(Optional) A transformation for use in the order by, fully qualify any table statements.",
                     "examples": [
@@ -376,24 +363,14 @@
                     ]
                   },
                   "source_column": {
-                    "type": "string",
+                    "type": ["string", "null"],
                     "title": "(Optional) The source column"
                   },
                   "source_name": {
-                    "type": "string",
+                    "type": ["string", "null"],
                     "title": "(Optional) The source table name, driving table used as default"
                   }
-                },
-                "examples": [{
-                    "transformation": "ifnull(uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer.statuschangeddate,uk_tds_chordiant_eod_fc_is.fc_chordiant_bsbportfoliooffer.effective_from_dt)"
-                  },
-                  {
-                    "source_column": "effective_from_dt_csn_seq"
-                  },
-                  {
-                    "source_column": "effective_from_dt_seq"
-                  }
-                ]
+                }
               }
             }
           }
@@ -432,6 +409,13 @@
         "type": "string",
         "title": "A task within the same DAG or another DAG (specified <dag name>.<task id>)"
       }
+    },
+    "author": {
+      "type": "string",
+      "title": "The name of the person who created the config.",
+      "examples": [
+        "Sean Conkie"
+      ]
     }
   }
 }

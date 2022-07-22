@@ -53,7 +53,7 @@ def main(logger: ILogger, args: argparse.Namespace):
         if not config:
             return 1
 
-        schema = get_json(logger, "./cfg/dag/dag_cfg_schema.json")
+        schema = get_json(logger, "./bq_application/job/schema_cfg_job.json")
         if not schema:
             return 1
 
@@ -62,17 +62,35 @@ def main(logger: ILogger, args: argparse.Namespace):
         if not result:
             exit_code = 1
 
+        if result and "properties" in config.keys():
+            logger.info(f"{pop_stack()} - validate properties object")
+            if config.get("type") == "BATCH":
+                properties_schema = get_json(
+                    logger, "./bq_application/job/schema_cfg_batch_properties.json"
+                )
+
+                if properties_schema:
+                    logger.debug(
+                        f"{pop_stack()} - validating properties: {config.get('type')}"
+                    )
+                    properties_check_result = IJSONValidate(
+                        logger, properties_schema, config.get("properties", {})
+                    )
+                    if not properties_check_result:
+                        exit_code = 1
+
+                else:
+                    logger.debug(
+                        f"{pop_stack()} - skipped properties validation ({config.get('type', '<missing job type>')})"
+                    )
+
         if result and "tasks" in config.keys():
             logger.info(f"{pop_stack()} - validate task object(s)")
             for t in config["tasks"]:
                 task_schema = None
-                if t["operator"] == "CreateTable":
+                if t["operator"] == "CREATETABLE":
                     task_schema = get_json(
-                        logger, "./cfg/dag/dag_cfg_createtable_task_schema.json"
-                    )
-                elif t["operator"] == "DataCheck":
-                    task_schema = get_json(
-                        logger, "./cfg/dag/dag_cfg_datacheck_task_schema.json"
+                        logger, "./bq_application/job/schema_cfg_createtable_task.json"
                     )
 
                 if task_schema:
@@ -107,6 +125,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--config_directory",
         required=False,
+        default="./bq_application/job/",
         dest="config_directory",
         help="Specify the location of the config file(s) which are to be validated.",
     )
