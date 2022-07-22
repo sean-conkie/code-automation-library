@@ -1,0 +1,58 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema",
+    "$id": "schema_cfg_job.json",
+    "type": "object",
+    "default": {},
+    "title": "Root Schema",
+    "required": [
+        "name",
+        "type",
+        "properties",
+        "tasks"
+    ],
+    "properties": {
+        "name": {
+            "type": "string",
+            "default": "",
+            "title": "The name of the Job",
+            "examples": [
+                "GCP_SPINE_OFFER"
+            ]
+        },
+        "description": {
+            "type": "string",
+            "default": "",
+            "title": "Description of the job",
+            "examples": [
+                "GCP_SPINE_OFFER"
+            ]
+        },
+        "type": {
+            "type": "string",
+            "default": "",
+            "title": "The type of the Job",
+            "examples": [
+                "BATCH",
+                "DAG"
+            ]
+        },
+        "properties": {
+            "type": "object",
+            "default": {},
+            "title": "Allows properties to be passed to target python file."
+        },
+        "tasks": {
+            "type": "array",
+            "default": [],
+            "title": "A list of tasks to be created in the target DAG"
+        },
+        "author": {
+            "type": "string",
+            "default": "",
+            "title": "The author of the config",
+            "examples": [
+                "Sean Conkie"
+            ]
+        }
+    }
+}
