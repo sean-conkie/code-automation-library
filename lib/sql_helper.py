@@ -5,23 +5,25 @@ import re
 from datetime import datetime
 from jinja2 import Environment, FileSystemLoader
 from lib.baseclasses import (
+    DEFAULT_SOURCE_ALIAS,
     Analytic,
     AnalyticType,
     Condition,
     ConversionType,
+    converttoobj,
     Field,
+    JoinType,
     Join,
     LogicOperator,
     Operator,
-    JoinType,
-    Task,
-    TaskOperator,
-    WriteDisposition,
-    UpdateTask,
+    SourceTable,
     SQLTask,
     SQLParameter,
+    Task,
+    TaskOperator,
     TableType,
-    converttoobj,
+    UpdateTask,
+    WriteDisposition,
 )
 from lib.helper import FileType, format_description
 from lib.logger import ILogger, pop_stack
@@ -99,6 +101,7 @@ def create_sql(logger: ILogger, task: Task, dataset_staging: str = None) -> str:
         TableType[task.parameters.get("target_type")],
         task.parameters.get("driving_table"),
         converttoobj(task.parameters.get("source_to_target"), ConversionType.SOURCE),
+        converttoobj(task.parameters.get("source_tables"), ConversionType.SOURCETABLES),
         WriteDisposition[
             task.parameters.get("write_disposition", "WRITETRUNCATE").upper()
         ],
@@ -301,7 +304,7 @@ def create_type_1_sql(
         dw_index = 1
         for i, field in enumerate(wtask.parameters.source_to_target):
             if not field.pk:
-                dw_index = i
+                dw_index = i + 1
                 break
         wtask.parameters.source_to_target.insert(
             dw_index,
@@ -572,6 +575,10 @@ def create_type_2_sql(
     analytics = create_type_2_analytic_list(logger, task)
     wtask = copy.deepcopy(task)
 
+    wtask.parameters.destination_table = f"{td_table}_p1"
+    wtask.parameters.destination_dataset = wtask.parameters.staging_dataset
+    wtask.parameters.write_disposition = WriteDisposition.WRITETRANSIENT
+
     for analytic in analytics:
         wtask.add_analytic(analytic)
     delta = create_delta_conditions(logger, task)
@@ -638,22 +645,34 @@ def create_type_2_sql(
     # second we complete CDC.  We create a new task object using our p1 table as
     # driving table
     p2_task = SQLTask(
-        "p2_task", TaskOperator.CREATETABLE, copy.deepcopy(task.parameters)
+        "p2_task",
+        TaskOperator.CREATETABLE,
+        copy.deepcopy(task.parameters),
+        copy.copy(task.author),
     )
     p2_task.parameters.write_disposition = WriteDisposition.WRITETRANSIENT
+    p2_task.parameters.destination_table = f"{td_table}_p2"
+    p2_task.parameters.destination_dataset = p2_task.parameters.staging_dataset
     p2_task.parameters.driving_table = (
         f"{task.parameters.staging_dataset}.{td_table}_p1"
     )
+    p1_source_table = SourceTable(
+        dataset_name=task.parameters.staging_dataset,
+        table_name=f"{td_table}_p1",
+        alias="src",
+    )
     p2_task.parameters.source_to_target = [
         Field(
-            transformation=f"* except({','.join([t.column.name for t in analytics])})"
+            name=field.name,
+            source_table=p1_source_table,
         )
+        for field in task.parameters.source_to_target
     ]
     p2_task.parameters.where = [
         Condition(
             [
-                f"ifnull(cast({c.name} as string),'NULL')",
-                f"ifnull(cast(prev_{c.name} as string),'NULL')",
+                f"ifnull(cast(src.{c.name} as string),'NULL')",
+                f"ifnull(cast(src.prev_{c.name} as string),'NULL')",
             ],
             operator=Operator.NE,
             condition=LogicOperator.OR,
@@ -675,29 +694,58 @@ def create_type_2_sql(
 
     # final step takes the data following the CDC and adds the effective_to_dt
     td_task = SQLTask(
-        "td_task", TaskOperator.CREATETABLE, copy.deepcopy(task.parameters)
+        "td_task",
+        TaskOperator.CREATETABLE,
+        copy.deepcopy(task.parameters),
+        copy.copy(task.author),
     )
     td_task.parameters.driving_table = (
         f"{task.parameters.staging_dataset}.{td_table}_p2"
     )
+    p2_source_table = SourceTable(
+        dataset_name=task.parameters.staging_dataset,
+        table_name=f"{td_table}_p2",
+        alias="src",
+    )
     td_task.parameters.source_to_target = [
-        Field(name=c.name, source_column=c.name, pk=c.pk)
+        Field(name=c.name, source_column=c.name, source_table=p2_source_table, pk=c.pk)
         for c in task.parameters.source_to_target
     ]
+
+    td_task.parameters.joins = None
+    td_task.parameters.where = None
+
+    to_index = None
+    for i, col in enumerate(task.parameters.source_to_target):
+        if col.name == "effective_from_dt_seq":
+            to_index = i + 1
+            break
+
     td_task.add_analytic(
         Analytic(
             [
-                Field(name=p.name, source_column=p.name)
+                Field(
+                    name=p.name,
+                    source_column=p.name,
+                    source_table=p2_source_table,
+                )
                 for p in task.parameters.history.partition
             ],
             [
-                Field(name="effective_from_dt", source_column="effective_from_dt"),
+                Field(
+                    name="effective_from_dt",
+                    source_column="effective_from_dt",
+                    source_table=p2_source_table,
+                ),
                 Field(
                     name="effective_from_dt_csn_seq",
                     source_column="effective_from_dt_csn_seq",
+                    source_table=p2_source_table,
                 ),
                 Field(
-                    name="effective_from_dt_seq", source_column="effective_from_dt_seq"
+                    name="effective_from_dt_seq",
+                    source_column="effective_from_dt_seq",
+                    source_table=p2_source_table,
                 ),
             ],
             offset=1,
@@ -705,18 +753,20 @@ def create_type_2_sql(
             type=AnalyticType.LEAD,
             column=Field(name="effective_to_dt", source_column="effective_from_dt"),
         ),
+        to_index,
     )
 
     if len(delta):
         sql.extend(create_delta_comparisons(logger, td_task))
 
     else:
-        td_task.parameters.source_to_target.append(
+        td_task.parameters.source_to_target.insert(
+            1,
             Field(
                 transformation=f"current_timestamp()",
                 data_type="TIMESTAMP",
                 name="dw_last_modified_dt",
-            )
+            ),
         )
         sql.append(
             create_table_query(
@@ -751,6 +801,7 @@ def create_type_2_analytic_list(logger: ILogger, task: SQLTask) -> list:
             column=Field(
                 name=f"prev_{c.name}",
                 source_column=c.source_column,
+                source_table=c.source_table,
             ),
             offset=1,
             default=None,
@@ -842,11 +893,9 @@ def create_table_query(
         f"{wtask.parameters.destination_dataset}.{wtask.parameters.destination_table}:{wtask.parameters.write_disposition.value}:"
     )
 
-    tables, frm, where = itemgetter("tables", "from", "where")(
-        create_sql_conditions(logger, wtask)
-    )
+    frm, where = itemgetter("from", "where")(create_sql_conditions(logger, wtask))
 
-    select = create_sql_select(logger, wtask, tables)
+    select = create_sql_select(logger, wtask)
     query_list = [
         ",\n".join(select),
         "\n",
@@ -911,17 +960,16 @@ def create_update_query(logger: ILogger, task: UpdateTask) -> str:
     return "\n".join(outp)
 
 
-def create_sql_select(logger: ILogger, task: SQLTask, tables: dict) -> str:
+def create_sql_select(logger: ILogger, task: SQLTask) -> str:
     """
-    > This function creates a list of select statements from the source_to_target list in the SQLTask
+    > This function creates a SQL select statement from a SQLTask object
 
     Args:
-      logger (ILogger): ILogger - the logger object
-      task (SQLTask): SQLTask object
-      tables (dict): a dictionary of the tables in the query, keyed by the table name
+      logger (ILogger): ILogger - this is the logger that is passed in from the calling function.
+      task (SQLTask): SQLTask
 
     Returns:
-      A list of strings.
+      A string
     """
 
     logger.info(f"{pop_stack()} - STARTED".center(100, "-"))
@@ -936,9 +984,7 @@ def create_sql_select(logger: ILogger, task: SQLTask, tables: dict) -> str:
     for i, column in enumerate(task.parameters.source_to_target):
         prefix = "select " if i == 0 else "       "
 
-        source = column.source(task.parameters.driving_table)
-        for key in tables.keys():
-            source = source.replace(key, tables[key])
+        source = column.source(DEFAULT_SOURCE_ALIAS)
 
         alias = (
             column.name.rjust(
@@ -959,47 +1005,26 @@ def create_sql_select(logger: ILogger, task: SQLTask, tables: dict) -> str:
 
 def create_sql_conditions(logger: ILogger, task: SQLTask) -> dict:
     """
-    It takes a SQLTask object and returns a dictionary containing the tables, from and where clauses of
-    the SQL statement
+    > This function creates the `from` and `where` clauses of a SQL statement
 
     Args:
-      logger (ILogger): ILogger - this is the logger object that is passed to the function.
-      task (SQLTask): SQLTask object
+      logger (ILogger): ILogger - the logger object
+      task (SQLTask): SQLTask
 
     Returns:
-      A dictionary with the following keys:
-        tables: a dictionary of tables and their aliases
-        from: a list of strings that represent the from clause
-        where: a string that represents the where clause
+      A dictionary with two keys: from and where.
     """
     logger.info(f"{pop_stack()} - STARTED".center(100, "-"))
-    tables = {task.parameters.driving_table: "a"}
+
     i = 1
-    frm = [
-        f"  from {task.parameters.driving_table} {tables[task.parameters.driving_table]}"
-    ]
+    frm = [f"  from {task.parameters.driving_table} {DEFAULT_SOURCE_ALIAS}"]
     logger.info(f"{pop_stack()} - identifying join conditions")
     if task.parameters.joins:
         for join in task.parameters.joins:
 
-            if join.left:
-                if not join.left in tables.keys():
-                    tables[join.left] = chr(i + 97)
-                    i = +1
-
-            if not join.right in tables.keys():
-                tables[join.right] = chr(i + 97)
-                i = +1
-
             frm.append(
-                f"{join.join_type.value.rjust(6)} join {join.right} {tables[join.right]}"
+                f"{join.join_type.value.rjust(6)} join {join.right.dataset_name}.{join.right.table_name} {join.right.alias}"
             )
-
-            for c in join.on:
-                for i, f in enumerate(c.fields):
-                    m = re.search(pattern, f, re.IGNORECASE)
-                    if m.group("table"):
-                        c.fields[i] = f"{tables[m.group('table')]}.{m.group('column')}"
 
             pad = max([len(c.fields[0]) for c in join.on])
             for j, condition in enumerate(join.on):
@@ -1022,29 +1047,24 @@ def create_sql_conditions(logger: ILogger, task: SQLTask) -> dict:
         create_sql_where(
             logger,
             task.parameters.where,
-            tables,
         )
         if task.parameters.where
         else ""
     )
 
-    outp = {"tables": tables, "from": frm, "where": where}
+    outp = {"from": frm, "where": where}
 
     logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100, "-"))
     return outp
 
 
-def create_sql_where(
-    logger: ILogger, conditions: list[Condition], tables: dict = {}
-) -> str:
+def create_sql_where(logger: ILogger, conditions: list[Condition]) -> str:
     """
-    It takes a list of conditions and a dictionary of tables and returns a list of strings that can be
-    used in a SQL where clause
+    It takes a list of conditions and returns a list of strings that can be used in a SQL where clause
 
     Args:
       logger (ILogger): ILogger - this is the logger object that is passed to the function.
-      conditions (list[Condition]): list of Condition objects
-      tables (dict): dict = {}
+      conditions (list[Condition]): list[Condition]
 
     Returns:
       A list of strings
@@ -1052,18 +1072,10 @@ def create_sql_where(
     logger.info(f"{pop_stack()} - STARTED".center(100, "-"))
     logger.debug(
         f"""{pop_stack()} - creating where conditions:)
-                               conditions  - {conditions}
-                               tables      - {tables}"""
+                               conditions  - {conditions}"""
     )
 
     where = []
-
-    # for each condition, replace table names with alias
-    for c in conditions:
-        for i, f in enumerate(c.fields):
-            m = re.search(pattern, f, re.IGNORECASE)
-            if m.group("table"):
-                c.fields[i] = f"{tables[m.group('table')]}.{m.group('column')}"
 
     pad = max([len(c.fields[0]) for c in conditions]) if len(conditions) > 0 else 0
     for i, condition in enumerate(conditions):
@@ -1074,8 +1086,8 @@ def create_sql_where(
         else:
             prefix = "   and "
 
-        left_table = condition.fields[0]
-        right_table = condition.fields[1]
+        left_table = condition.fields[0] if condition.fields[0] else ""
+        right_table = condition.fields[1] if condition.fields[1] else ""
 
         where.append(
             f"{prefix}{left_table.ljust(pad)} {condition.operator.value} {right_table}"

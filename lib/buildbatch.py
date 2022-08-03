@@ -20,6 +20,12 @@ __all__ = [
 ]
 
 
+# following variables are set global to allow recursive
+# transformations to be applied
+DEPENDENCIES = []
+SUB_PROCESS_DICT = {}
+
+
 def buildbatch(logger: ILogger, args: dict, config: dict) -> int:
     """
     The function takes a logger, a dictionary of arguments and a dictionary of configuration and returns
@@ -42,13 +48,11 @@ def buildbatch(logger: ILogger, args: dict, config: dict) -> int:
     logger.info(f"building process - {config['name']}")
 
     tasks = []
-    sub_process_list = []
-    dependencies = []
     scripts = []
 
     # for each item in the task array, check the operator type and use this
     # to determine the task parameters to be used
-    for t in config["tasks"]:
+    for i, t in enumerate(config["tasks"]):
         task = Task(
             t.get("task_id"),
             t.get("operator"),
@@ -68,13 +72,34 @@ def buildbatch(logger: ILogger, args: dict, config: dict) -> int:
                     if not d in config["tasks"]:
                         config["tasks"].append(d)
 
-        sub_process_list.append(
-            create_table_task(logger, task, config.get("properties"), args)
+        sub_process = create_table_task(
+            logger, task, config.get("properties", {}), args
         )
+
+        SUB_PROCESS_DICT[sub_process] = i
         tasks.append(task.task_id)
         scripts.append(f"{task.task_id}.sql")
 
-        dependencies.extend([(task.task_id, d) for d in task.dependencies])
+        for d in task.dependencies:
+            d_sub_process = d.replace(
+                config.get("properties", {}).get("prefix", "") + "_", ""
+            ).upper()
+            d_file = d.replace(config.get("properties", {}).get("prefix", "") + "_", "")
+
+            DEPENDENCIES.extend([(sub_process, f"'{d_sub_process}|{d_file}|Y'\\")])
+
+    if len(DEPENDENCIES) > 0:
+        logger.info(f"calculating dependencies")
+
+        for dep in DEPENDENCIES:
+            dependency_re_order(logger, dep)
+
+    else:
+        logger.info(f"no dependencies")
+
+    sub_process_list = list(
+        dict(sorted(SUB_PROCESS_DICT.items(), key=lambda item: item[1])).keys()
+    )
 
     logger.info(f"creating template parameters")
 
@@ -251,3 +276,18 @@ def create_table_task(
 
     logger.info(f"{pop_stack()} COMPLETED SUCCESSFULLY".center(100, "-"))
     return outp
+
+
+def dependency_re_order(logger: ILogger, dependant_pair: tuple):
+    logger.info(f"{pop_stack()} STARTED".center(100, "-"))
+    if SUB_PROCESS_DICT[dependant_pair[0]] < SUB_PROCESS_DICT[dependant_pair[1]]:
+        logger.info(f"Ordering pair {dependant_pair}")
+        SUB_PROCESS_DICT[dependant_pair[0]] = SUB_PROCESS_DICT[dependant_pair[1]] + 1
+
+        for dep in DEPENDENCIES:
+            if dep[1] == dependant_pair[0]:
+                logger.info(f"Re-calculating impacted dependencies")
+                dependency_re_order(logger, dep)
+
+    logger.info(f"batch files {pop_stack()} COMPLETED SUCCESSFULLY".center(100, "-"))
+    return 0

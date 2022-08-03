@@ -25,7 +25,11 @@ __all__ = [
     "todict",
     "converttoobj",
     "TableType",
+    "DEFAULT_SOURCE_ALIAS",
+    "SourceTable",
 ]
+
+DEFAULT_SOURCE_ALIAS = "src"
 
 
 class ConversionType(Enum):
@@ -34,6 +38,7 @@ class ConversionType(Enum):
     JOIN = "join"
     DELTA = "delta"
     SOURCE = "source_to_target"
+    SOURCETABLES = "source_tables"
 
 
 class LogicOperator(Enum):
@@ -61,6 +66,8 @@ class Operator(Enum):
     LG = "<>"
     LT = "<"
     LE = "<="
+    NULL = "is null"
+    NOTNULL = "is not null"
     NONE = None
 
 
@@ -96,6 +103,104 @@ class TableType(Enum):
     TYPE4 = 4
     TYPE5 = 5
     TYPE6 = 6
+
+
+class SourceTable(object):
+    def __init__(
+        self,
+        source_project: str = None,
+        dataset_name: str = None,
+        table_name: str = None,
+        alias: str = None,
+    ) -> None:
+        self._source_project = source_project
+        self._dataset_name = dataset_name
+        self._table_name = table_name
+        self._alias = alias
+
+    def __str__(self) -> str:
+        return f"{self._dataset_name}.{self._table_name} {self._alias}"
+
+    @property
+    def source_project(self) -> str:
+        """
+        It returns the source project.
+
+        Returns:
+          The source project.
+        """
+        return self._source_project
+
+    @source_project.setter
+    def source_project(self, value: str) -> None:
+        """
+        This function sets the value of the source_project attribute of the object that calls it
+
+        Args:
+          value (str): The value of the parameter.
+        """
+        self._source_project = value
+
+    @property
+    def dataset_name(self) -> str:
+        """
+        This function returns the name of the dataset
+
+        Returns:
+          The dataset name.
+        """
+        return self._dataset_name
+
+    @dataset_name.setter
+    def dataset_name(self, value: str) -> None:
+        """
+        This function takes in a string value and sets the value of the dataset_name attribute to the
+        value of the string
+
+        Args:
+          value (str): The value to set the parameter to.
+        """
+        self._dataset_name = value
+
+    @property
+    def table_name(self) -> str:
+        """
+        This function returns the table name of the class
+
+        Returns:
+          The table name.
+        """
+        return self._table_name
+
+    @table_name.setter
+    def table_name(self, value: str) -> None:
+        """
+        This function takes in a string and returns None
+
+        Args:
+          value (str): The value to be set.
+        """
+        self._table_name = value
+
+    @property
+    def alias(self) -> str:
+        """
+        It returns the alias of the object.
+
+        Returns:
+          The alias of the object.
+        """
+        return self._alias
+
+    @alias.setter
+    def alias(self, value: str) -> None:
+        """
+        This function takes in a string and sets the alias of the object to that string
+
+        Args:
+          value (str): The value of the parameter.
+        """
+        self._alias = value
 
 
 class Condition(object):
@@ -247,7 +352,7 @@ class Field(object):
         name: str = None,
         data_type: str = None,
         source_column: str = None,
-        source_name: str = None,
+        source_table: SourceTable = None,
         transformation: str = None,
         nullable: bool = None,
         pk: bool = None,
@@ -256,7 +361,7 @@ class Field(object):
 
         self._transformation = transformation
         self._source_column = source_column
-        self._source_name = source_name
+        self._source_table = source_table
         self._name = name
         self._data_type = data_type
         self._nullable = nullable
@@ -352,18 +457,18 @@ class Field(object):
         self._source_column = value
 
     @property
-    def source_name(self) -> str:
+    def source_table(self) -> SourceTable:
         """
-        Returns the source_name
+        Returns the source_table
         """
-        return self._source_name
+        return self._source_table
 
-    @source_name.setter
-    def source_name(self, value: str) -> None:
+    @source_table.setter
+    def source_table(self, value: SourceTable) -> None:
         """
-        Sets the source_name
+        Sets the source_table
         """
-        self._source_name = value
+        self._source_table = value
 
     @property
     def transformation(self) -> str:
@@ -433,15 +538,26 @@ class Field(object):
     def source(self, default_source_name: str = None) -> str:
 
         if isnullorwhitespace(self._transformation):
-            if isnullorwhitespace(self._source_name) and isnullorwhitespace(
-                default_source_name
-            ):
+            if self._source_table is None and isnullorwhitespace(default_source_name):
                 return self.source_column
-            return (
-                f"{ifnull(self._source_name, default_source_name)}.{self.source_column}"
-            )
+
+            if self._source_table:
+                return f"{self._source_table.alias}.{self.source_column}"
+
+            return f"{default_source_name}.{self.source_column}"
+
         else:
-            return self._transformation
+            table = (
+                f"{self._source_table.dataset_name}.{self._source_table.table_name}"
+                if self._source_table
+                else None
+            )
+
+            return (
+                self._transformation.replace(table, self._source_table.alias)
+                if table
+                else self._transformation
+            )
 
 
 class Task(object):
@@ -577,11 +693,46 @@ class Delta(object):
         self._upper_bound = value
 
 
+class OrderField(Field):
+    def __init__(
+        self,
+        name: str = None,
+        data_type: str = None,
+        source_column: str = None,
+        source_table: SourceTable = None,
+        transformation: str = None,
+        nullable: bool = None,
+        pk: bool = None,
+        hk: bool = None,
+        is_desc: bool = None,
+    ) -> None:
+
+        self._transformation = transformation
+        self._source_column = source_column
+        self._source_table = source_table
+        self._name = name
+        self._data_type = data_type
+        self._nullable = nullable
+        self._pk = pk
+        self._hk = hk
+        self._is_desc = is_desc
+
+    @property
+    def is_desc(self) -> bool:
+        """Returns the is_desc"""
+        return self._is_desc
+
+    @is_desc.setter
+    def is_desc(self, value: bool) -> None:
+        """Sets the is_desc"""
+        self._is_desc = value
+
+
 class Analytic(object):
     def __init__(
         self,
         partition: list[Field],
-        order: list[Field],
+        order: list[OrderField],
         type: AnalyticType = AnalyticType.NONE,
         driving_column: list[Field] = None,
         column: Field = None,
@@ -623,12 +774,12 @@ class Analytic(object):
         self._driving_column = value
 
     @property
-    def order(self) -> list[Field]:
+    def order(self) -> list[OrderField]:
         """Returns the order"""
         return self._order
 
     @order.setter
-    def order(self, value: list[Field]) -> None:
+    def order(self, value: list[OrderField]) -> None:
         """Sets the order"""
         self._order = value
 
@@ -805,6 +956,7 @@ class SQLParameter(object):
         target_type: TableType,
         driving_table: str,
         source_to_target: list[Field],
+        source_tables: dict,
         write_disposition: WriteDisposition,
         sql: str = None,
         joins: list[Join] = None,
@@ -821,6 +973,7 @@ class SQLParameter(object):
         self._target_type = target_type
         self._driving_table = driving_table
         self._source_to_target = source_to_target
+        self._source_tables = source_tables
         self._write_disposition = write_disposition
         self._sql = sql
         self._joins = joins
@@ -886,6 +1039,16 @@ class SQLParameter(object):
     def source_to_target(self, value: list[Field]) -> None:
         """Sets the source_to_target"""
         self._source_to_target = value
+
+    @property
+    def source_tables(self) -> dict:
+        """Returns the source_tables"""
+        return self._source_tables
+
+    @source_tables.setter
+    def source_tables(self, value: dict) -> None:
+        """Sets the source_tables"""
+        self._source_tables = value
 
     @property
     def write_disposition(self) -> WriteDisposition:
@@ -1073,7 +1236,7 @@ class SQLTask(Task):
         field_list = []
         for p in fields:
             source_name = (
-                p.source_name if p.source_name else self.parameters.driving_table
+                p.source_table.alias if p.source_table else DEFAULT_SOURCE_ALIAS
             )
             source_column = p.source_column
             field_list.append(
@@ -1083,7 +1246,7 @@ class SQLTask(Task):
             )
         return ",".join(field_list)
 
-    def add_analytic(self, analytic: Analytic) -> None:
+    def add_analytic(self, analytic: Analytic, position: int = None) -> None:
         """
         > This function adds an analytic to the source_to_target list
 
@@ -1098,19 +1261,42 @@ class SQLTask(Task):
         order = self.__createfieldlist(analytic.order)
 
         source_name = (
-            analytic.column.source_name
-            if analytic.column.source_name
-            else self.parameters.driving_table
+            analytic.column.source_table.alias
+            if analytic.column.source_table
+            else DEFAULT_SOURCE_ALIAS
         )
         source_column = analytic.column.name
         offset = f", {analytic.offset}" if analytic.offset else ""
         default = f", {analytic.default}" if analytic.default else ""
+        partition_comma = "," if len(partition.split(",")) > 1 else ""
+        partition_first = f"{partition.split(',')[0]}{partition_comma}\n"
+
+        order_by_offset = len(
+            f"{analytic.type.value}({source_name}.{source_column}{offset}{default}) over(partition by"
+        )
+        order_by_comma = "," if len(order.split(",")) > 1 else ""
+        order_by = f"order by {order.split(',')[0]}{order_by_comma}\n".rjust(
+            order_by_offset + len(f"order by {order.split(',')[0]}{order_by_comma}")
+        )
+        order_by_other = ",\n".join(
+            [
+                f"{col}".rjust(order_by_offset + 8 + len(col))
+                for col in order.split(",")[1:]
+            ]
+        )
+
+        partition_other = ",\n".join(
+            [
+                f"{col}".rjust(order_by_offset + 8 + len(col))
+                for col in partition.split(",")[1:]
+            ]
+        )
+        if len(partition_other) > 0:
+            partition_other.append("\n")
 
         analytic_transformation = Field(
             name=analytic.column.name,
-            transformation=f"""{analytic.type.value}({source_name}.{source_column}{offset}{default}) 
-            over(partition by {partition} 
-                     order by {order})""",
+            transformation=f"{analytic.type.value}({source_name}.{source_column}{offset}{default}) over(partition by {partition_first}{partition_other}{order_by}{order_by_other})",
         )
 
         column_list = [c.name for c in self.parameters.source_to_target]
@@ -1119,6 +1305,11 @@ class SQLTask(Task):
                 if analytic_transformation.name == c.name:
                     self.parameters.source_to_target[i] = analytic_transformation
                     break
+        elif position:
+            self.parameters.source_to_target.insert(
+                position,
+                analytic_transformation,
+            )
         else:
             self.parameters.source_to_target.append(analytic_transformation)
 
@@ -1263,7 +1454,11 @@ def converttoobj(
                 f"A list input must be provided for conversion to {conversiontype.value}"
             )
             input = [input]
-    elif conversiontype in [ConversionType.ANALYTIC, ConversionType.DELTA]:
+    elif conversiontype in [
+        ConversionType.ANALYTIC,
+        ConversionType.DELTA,
+        ConversionType.SOURCETABLES,
+    ]:
         if not type(input) == dict:
             raise ValueError(
                 f"A dictionary input must be provided for conversion to {conversiontype.value}"
@@ -1275,21 +1470,46 @@ def converttoobj(
                 Field(
                     name=field.get("name"),
                     source_column=field.get("source_column"),
-                    source_name=field.get("source_name"),
+                    source_table=SourceTable(
+                        source_project=field.get("source_table", {}).get(
+                            "source_project"
+                        ),
+                        dataset_name=field.get("source_table", {}).get("dataset_name"),
+                        table_name=field.get("source_table", {}).get("table_name"),
+                        alias=field.get("source_table", {}).get("alias"),
+                    )
+                    if field.get("source_table")
+                    else None,
                     transformation=field.get("transformation"),
-                    pk=field.get("pk"),
-                    hk=field.get("hk"),
+                    pk=field.get("is_primary_key"),
+                    hk=field.get("is_history_key"),
                 )
                 for field in input.get("partition")
             ],
             [
-                Field(
-                    name=field.get("name"),
-                    source_column=field.get("source_column"),
-                    source_name=field.get("source_name"),
-                    transformation=field.get("transformation"),
-                    pk=field.get("pk"),
-                    hk=field.get("hk"),
+                OrderField(
+                    name=field.get("field", {}).get("name"),
+                    source_column=field.get("field", {}).get("source_column"),
+                    source_table=SourceTable(
+                        source_project=field.get("field", {})
+                        .get("source_table", {})
+                        .get("source_project"),
+                        dataset_name=field.get("field", {})
+                        .get("source_table", {})
+                        .get("dataset_name"),
+                        table_name=field.get("field", {})
+                        .get("source_table", {})
+                        .get("table_name"),
+                        alias=field.get("field", {})
+                        .get("source_table", {})
+                        .get("alias"),
+                    )
+                    if field.get("source_table")
+                    else None,
+                    transformation=field.get("field", {}).get("transformation"),
+                    pk=field.get("field", {}).get("is_primary_key"),
+                    hk=field.get("field", {}).get("is_history_key"),
+                    is_desc=field.get("is_desc"),
                 )
                 for field in input.get("order")
             ],
@@ -1298,20 +1518,42 @@ def converttoobj(
                 Field(
                     name=field.get("name"),
                     source_column=field.get("source_column"),
-                    source_name=field.get("source_name"),
+                    source_table=SourceTable(
+                        source_project=field.get("source_table", {}).get(
+                            "source_project"
+                        ),
+                        dataset_name=field.get("source_table", {}).get("dataset_name"),
+                        table_name=field.get("source_table", {}).get("table_name"),
+                        alias=field.get("source_table", {}).get("alias"),
+                    )
+                    if field.get("source_table")
+                    else None,
                     transformation=field.get("transformation"),
-                    pk=field.get("pk"),
-                    hk=field.get("hk"),
+                    pk=field.get("is_primary_key"),
+                    hk=field.get("is_history_key"),
                 )
                 for field in input.get("driving_column")
             ],
             Field(
                 name=input.get("column", {}).get("name"),
                 source_column=input.get("column", {}).get("source_column"),
-                source_name=input.get("column", {}).get("source_name"),
+                source_table=SourceTable(
+                    source_project=input.get("column", {})
+                    .get("source_table", {})
+                    .get("source_project"),
+                    dataset_name=input.get("column", {})
+                    .get("source_table", {})
+                    .get("dataset_name"),
+                    table_name=input.get("column", {})
+                    .get("source_table", {})
+                    .get("table_name"),
+                    alias=input.get("column", {}).get("source_table", {}).get("alias"),
+                )
+                if input.get("source_table")
+                else None,
                 transformation=input.get("column", {}).get("transformation"),
-                pk=input.get("column", {}).get("pk"),
-                hk=input.get("column", {}).get("hk"),
+                pk=input.get("column", {}).get("is_primary_key"),
+                hk=input.get("column", {}).get("is_history_key"),
             ),
             input.get("offset"),
             input.get("default"),
@@ -1323,7 +1565,14 @@ def converttoobj(
             Field(
                 name=field.get("name"),
                 source_column=field.get("source_column"),
-                source_name=field.get("source_name"),
+                source_table=SourceTable(
+                    source_project=field.get("source_table").get("source_project"),
+                    dataset_name=field.get("source_table").get("dataset_name"),
+                    table_name=field.get("source_table").get("table_name"),
+                    alias=field.get("source_table").get("alias"),
+                )
+                if field.get("source_table")
+                else None,
                 transformation=field.get("transformation"),
                 pk=field.get("pk"),
                 hk=field.get("hk"),
@@ -1335,7 +1584,12 @@ def converttoobj(
     elif conversiontype == ConversionType.JOIN:
         obj = [
             Join(
-                j.get("right"),
+                SourceTable(
+                    source_project=j.get("right", {}).get("source_project"),
+                    dataset_name=j.get("right", {}).get("dataset_name"),
+                    table_name=j.get("right", {}).get("table_name"),
+                    alias=j.get("right", {}).get("alias"),
+                ),
                 [
                     Condition(
                         [field for field in c.get("fields", [])],
@@ -1344,7 +1598,12 @@ def converttoobj(
                     )
                     for c in j.get("on", [])
                 ],
-                j.get("left"),
+                SourceTable(
+                    source_project=j.get("left", {}).get("source_project"),
+                    dataset_name=j.get("left", {}).get("dataset_name"),
+                    table_name=j.get("left", {}).get("table_name"),
+                    alias=j.get("left", {}).get("alias"),
+                ),
                 JoinType(j.get("type", "left").lower()),
             )
             for j in input
@@ -1356,14 +1615,32 @@ def converttoobj(
                 name=field.get("name"),
                 data_type=field.get("data_type"),
                 source_column=field.get("source_column"),
-                source_name=field.get("source_name"),
+                source_table=SourceTable(
+                    source_project=field.get("source_table", {}).get("source_project"),
+                    dataset_name=field.get("source_table", {}).get("dataset_name"),
+                    table_name=field.get("source_table", {}).get("table_name"),
+                    alias=field.get("source_table", {}).get("alias"),
+                )
+                if field.get("source_table")
+                else None,
                 transformation=field.get("transformation"),
                 nullable=field.get("nullable"),
-                pk=field.get("pk"),
-                hk=field.get("hk"),
+                pk=field.get("is_primary_key"),
+                hk=field.get("is_history_key"),
             )
             for field in input
         ]
+    elif conversiontype == ConversionType.SOURCETABLES:
+        obj = {
+            key: SourceTable(
+                source_project=input[key].get("source_project"),
+                dataset_name=input[key].get("dataset_name"),
+                table_name=input[key].get("table_name"),
+                alias=input[key].get("alias"),
+            )
+            for key in input
+        }
+
     elif conversiontype == ConversionType.WHERE:
         obj = [
             Condition(

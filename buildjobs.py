@@ -14,6 +14,17 @@ from lib.logger import ILogger, pop_stack
 
 
 def main(logger: ILogger, args: dict) -> int:
+    """
+    The function creates a list of config files using the source directory (dpath), if the path provided
+    is a file add id otherwise append each filename in directory
+
+    Args:
+      logger (ILogger): ILogger - this is the logger object that is passed to the function
+      args (dict): a dictionary of the command line arguments
+
+    Returns:
+      The return value is the exit code of the program.
+    """
 
     logger.info(f"job files - {pop_stack()} STARTED".center(100, "-"))
 
