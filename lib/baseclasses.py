@@ -119,7 +119,42 @@ class SourceTable(object):
         self._alias = alias
 
     def __str__(self) -> str:
+        """
+        The function returns a string that is the dataset name, table name, and alias of the table
+        
+        Returns:
+          The name of the dataset, the name of the table, and the alias.
+        """
         return f"{self._dataset_name}.{self._table_name} {self._alias}"
+
+    def __eq__(self, other) -> bool:
+        """
+        The function returns true if the source_project, dataset_name, table_name, and alias of the two
+        objects are equal
+        
+        Args:
+          other: The other object to compare to.
+        
+        Returns:
+          A boolean value.
+        """
+        return (self.source_project == other.source_project
+            and self.dataset_name == other.dataset_name
+            and self.table_name == other.table_name
+            and self.alias == other.alias
+        )
+
+    def __ne__(self, other) -> bool:
+        """
+        If the two objects are not equal, return True. Otherwise, return False
+        
+        Args:
+          other: The other object to compare to.
+        
+        Returns:
+          The return value is a boolean value.
+        """
+        return not self.__eq__(other)
 
     @property
     def source_project(self) -> str:
@@ -1566,16 +1601,16 @@ def converttoobj(
                 name=field.get("name"),
                 source_column=field.get("source_column"),
                 source_table=SourceTable(
-                    source_project=field.get("source_table").get("source_project"),
-                    dataset_name=field.get("source_table").get("dataset_name"),
-                    table_name=field.get("source_table").get("table_name"),
-                    alias=field.get("source_table").get("alias"),
+                    source_project=field.get("source_table",{}).get("source_project"),
+                    dataset_name=field.get("source_table",{}).get("dataset_name"),
+                    table_name=field.get("source_table",{}).get("table_name"),
+                    alias=field.get("source_table",{}).get("alias"),
                 )
                 if field.get("source_table")
                 else None,
                 transformation=field.get("transformation"),
-                pk=field.get("pk"),
-                hk=field.get("hk"),
+                pk=field.get("is_primary_key"),
+                hk=field.get("is_history_key"),
             ),
             input.get("lower_bound"),
             upper_bound=input.get("upper_bound"),

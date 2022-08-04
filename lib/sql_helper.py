@@ -166,12 +166,7 @@ def create_delta_conditions(logger: ILogger, task: SQLTask) -> list[Condition]:
         if delta.field.transformation:
             field = delta.field.transformation
         else:
-            source_name = (
-                delta.field.source_name
-                if delta.field.source_name
-                else task.parameters.driving_table
-            )
-            field = f"{source_name}.{delta.field.source_column}"
+            field = delta.field.source(task.parameters.driving_table)
 
         lower_bound = convert_lower_bound(logger, delta.lower_bound)
 
@@ -194,46 +189,6 @@ def create_delta_conditions(logger: ILogger, task: SQLTask) -> list[Condition]:
                     operator=Operator.LT,
                 )
             )
-
-    logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100, "-"))
-    return outp
-
-
-def create_type_2_delta_condition(logger: ILogger, task: SQLTask) -> Condition:
-    """
-    > This function creates a condition object that can be used to filter the data in the driving table
-
-    Args:
-      logger (ILogger): ILogger - a logger object
-      task (SQLTask): SQLTask
-
-    Returns:
-      A Condition object
-    """
-
-    logger.info(f"{pop_stack()} - STARTED".center(100, "-"))
-
-    outp = None
-
-    if task.parameters.delta:
-        delta = task.parameters.delta
-        logger.debug(f"delta object: {delta}")
-        if delta.field.transformation:
-            field = delta.field.transformation
-        else:
-            source_name = (
-                task.parameters.driving_table
-                if not delta.field.source_name
-                else delta.field.source_name
-            )
-            field = f"{source_name}.{delta.field.source_column}"
-
-        upper_bound = convert_lower_bound(logger, delta.lower_bound)
-
-        outp = Condition(
-            [field, upper_bound],
-            operator=Operator.LT,
-        )
 
     logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100, "-"))
     return outp
@@ -358,12 +313,16 @@ def create_delta_comparisons(logger: ILogger, task: SQLTask) -> list[str]:
 
     dtask.parameters.joins = [
         Join(
-            f"{dtask.parameters.destination_dataset}.{dtask.parameters.destination_table}",
+            SourceTable(
+                dataset_name=dtask.parameters.destination_dataset,
+                table_name=dtask.parameters.destination_table,
+                alias="trg",
+            ),
             [
                 Condition(
                     [
-                        f"{dtask.parameters.driving_table}.{k}",
-                        f"{dtask.parameters.destination_dataset}.{dtask.parameters.destination_table}.{k}",
+                        f"src.{k}",
+                        f"trg.{k}",
                     ],
                     operator=Operator.EQ,
                 )
@@ -371,24 +330,32 @@ def create_delta_comparisons(logger: ILogger, task: SQLTask) -> list[str]:
             ],
         )
     ]
-
+    m = re.search(
+        r"^(?P<dataset_name>[a-z_\-0-9]+).(?P<table_name>[a-z_\-0-9]+)",
+        dtask.parameters.driving_table,
+        re.IGNORECASE,
+    )
     dtask.parameters.source_to_target = [
         Field(
             name=field.name,
             source_column=field.name,
-            source_name=f"{dtask.parameters.driving_table}",
+            source_table=SourceTable(
+                dataset_name=m.group("dataset_name"),
+                table_name=m.group("table_name"),
+                alias="src",
+            ),
         )
         for field in dtask.parameters.source_to_target
     ]
 
     dtask.parameters.source_to_target.append(
         Field(
-            transformation=f"if({dtask.parameters.destination_dataset}.{dtask.parameters.destination_table}.{keys[0]} is null, 1, 2)",
+            transformation=f"if(trg.{keys[0]} is null, 1, 2)",
             name="row_action",
         )
     )
 
-    regex = r"^.+\.(?P<table_name>\w+)(?P<table_index>\d+)$"
+    regex = r"^.+\.(?P<table_name>[a-z_\-0-9]+)(?P<table_index>\d+)$"
     m = re.match(regex, task.parameters.driving_table, re.IGNORECASE)
     table_index = int(m.group("table_index") if m else 0)
     table_name = m.group("table_name")
@@ -417,15 +384,17 @@ def create_delta_comparisons(logger: ILogger, task: SQLTask) -> list[str]:
             operator=Operator.EQ,
         )
     ]
-    iitask.parameters.driving_table = (
-        f"{iitask.parameters.staging_dataset}.{dtask.parameters.destination_table}"
+    iitask.parameters.driving_table = SourceTable(
+        dataset_name=iitask.parameters.staging_dataset,
+        table_name=dtask.parameters.destination_table,
+        alias="src",
     )
 
     iitask.parameters.source_to_target = [
         Field(
             name=field.name,
             source_column=field.name,
-            source_name=f"{iitask.parameters.driving_table}",
+            source_table=iitask.parameters.driving_table,
         )
         for field in task.parameters.source_to_target
     ]
@@ -463,7 +432,7 @@ def create_delta_comparisons(logger: ILogger, task: SQLTask) -> list[str]:
             Field(
                 field.name,
                 source_column=field.name,
-                source_name=iitask.parameters.driving_table,
+                source_table=iitask.parameters.driving_table,
             )
             for field in task.parameters.source_to_target
             if not field.pk
@@ -473,7 +442,7 @@ def create_delta_comparisons(logger: ILogger, task: SQLTask) -> list[str]:
             Field(
                 "effective_to_dt",
                 source_column="effective_to_dt",
-                source_name=f"{iitask.parameters.driving_table}",
+                source_table=iitask.parameters.driving_table,
             )
         ]
 
@@ -488,8 +457,8 @@ def create_delta_comparisons(logger: ILogger, task: SQLTask) -> list[str]:
     update_conditions = [
         Condition(
             [
-                f"{iitask.parameters.destination_dataset}.{iitask.parameters.destination_table}.{field.name}",
-                f"{dtask.parameters.staging_dataset}.{dtask.parameters.destination_table}.{field.name}",
+                f"src.{field.name}",
+                f"trg.{field.name}",
             ],
             operator=Operator.EQ,
         )
@@ -500,7 +469,7 @@ def create_delta_comparisons(logger: ILogger, task: SQLTask) -> list[str]:
     update_conditions.append(
         Condition(
             [
-                f"{iitask.parameters.driving_table}.row_action",
+                f"src.row_action",
                 "2",
             ],
             operator=Operator.EQ,
@@ -514,7 +483,7 @@ def create_delta_comparisons(logger: ILogger, task: SQLTask) -> list[str]:
         dtask.parameters.destination_table,
         source_to_target,
         {
-            f"{iitask.parameters.driving_table}": "src",
+            f"{iitask.parameters.driving_table.dataset_name}.{iitask.parameters.driving_table.table_name}": "src",
             f"{iitask.parameters.destination_dataset}.{iitask.parameters.destination_table}": "trg",
         },
         update_conditions,
@@ -595,27 +564,33 @@ def create_type_2_sql(
 
     # if delta, take all primary keys identified and add full history to p1
     if len(delta):
-        join_on = []
-        for field in task.parameters.source_to_target:
-            if field.hk:
-                join_on.append(
-                    Condition(
-                        fields=[
-                            f"{wtask.parameters.staging_dataset}.{td_table}_p1.{field.name}",
-                            f"{field.source(task.parameters.driving_table)}",
-                        ],
-                        operator=Operator.EQ,
-                    )
-                )
+        join_on = [
+            Condition(
+                fields=[
+                    f"p1.{field.name}",
+                    f"{field.source(task.parameters.driving_table)}",
+                ],
+                operator=Operator.EQ,
+            )
+            for field in task.parameters.source_to_target
+            if field.hk
+        ]
 
         delta_join = Join(
             join_type=JoinType.INNER,
-            right=f"{wtask.parameters.staging_dataset}.{td_table}_p1",
+            right=SourceTable(
+                dataset_name=wtask.parameters.staging_dataset,
+                table_name=f"{td_table}_p1",
+                alias="p1",
+            ),
             on=join_on,
         )
 
         delta_task = SQLTask(
-            "delta_task", TaskOperator.CREATETABLE, copy.deepcopy(task.parameters)
+            "delta_task",
+            TaskOperator.CREATETABLE,
+            copy.deepcopy(task.parameters),
+            copy.copy(task.author),
         )
         delta_task.parameters.write_disposition = WriteDisposition.WRITEAPPEND
 
@@ -835,12 +810,7 @@ def create_type_2_delta_condition(logger: ILogger, task: SQLTask) -> dict:
         if delta.field.transformation:
             field = delta.field.transformation
         else:
-            source_name = (
-                delta.field.source_name
-                if delta.field.source_name
-                else task.parameters.driving_table
-            )
-            field = f"{source_name}.{delta.field.source_column}"
+            field = delta.field.source(task.parameters.driving_table)
 
         if delta.lower_bound == "$TODAY":
             upper_bound = "timestamp(current_date)"
@@ -930,23 +900,11 @@ def create_update_query(logger: ILogger, task: UpdateTask) -> str:
 
     for i, f in enumerate(task.source_to_target):
         prefix = "   set " if i == 0 else "       "
-        source_name = (
-            f.source_name
-            if f.source_name
-            else f"{task.source_dataset}.{task.source_table}"
-        )
-        source_column = "" if not f.source_column else f.source_column
+        source = f.source(f"{task.source_dataset}.{task.source_table}")
 
-        if f.source_column:
-            source = f"{task.tables[source_name]}.{source_column}"
-        else:
-            transformation = f.transformation
-            for key in task.tables.keys():
-                transformation = transformation.replace(key, task.tables[key])
-
-            source = transformation
-        target_table = f"{task.target_dataset}.{task.target_table}"
-        target = f"{task.tables[target_table]}.{f.name.ljust(pad)}"
+        if f.transformation:
+            source = f.transformation
+        target = target = f"trg.{f.name.ljust(pad)}"
 
         st.append(f"{prefix}{target} = {source}")
 
@@ -954,7 +912,7 @@ def create_update_query(logger: ILogger, task: UpdateTask) -> str:
     source_table = f"{task.source_dataset}.{task.source_table}"
     outp.append(f"  from {source_table} {task.tables[source_table]}")
 
-    outp.append("\n".join(create_sql_where(logger, task.where, task.tables)))
+    outp.append("\n".join(create_sql_where(logger, task.where)))
     outp.append(";\n")
     logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100, "-"))
     return "\n".join(outp)

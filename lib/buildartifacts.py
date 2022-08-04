@@ -2,7 +2,7 @@ import json
 import os
 import re
 
-from lib.baseclasses import converttoobj, ConversionType, Field, Task
+from lib.baseclasses import converttoobj, ConversionType, Field, Task, WriteDisposition
 from lib.helper import ifnull
 from lib.logger import ILogger, pop_stack
 
@@ -47,6 +47,10 @@ def buildartifacts(logger: ILogger, args: dict, config: dict) -> int:
             task.parameters.get("source_to_target", []), ConversionType.SOURCE
         )
 
+        task.parameters["source_tables"] = converttoobj(
+            task.parameters.get("source_tables", {}), ConversionType.SOURCETABLES
+        )
+
         dw_index = 1
         for i, field in enumerate(task.parameters["source_to_target"]):
             if not field.pk:
@@ -79,68 +83,74 @@ def buildartifacts(logger: ILogger, args: dict, config: dict) -> int:
         )
 
         if task.parameters.get("build_artifacts", True):
-            logger.info(f'creating artifacts for "{task.task_id}" - {pop_stack()}')
-            table_def_content = [
-                {
-                    "name": field.name,
-                    "type": field.data_type,
-                    "mode": "nullable" if field.nullable else "required",
-                }
-                for field in task.parameters["source_to_target"]
-            ]
             table_definition = task.parameters["destination_table"]
-            with open(
-                os.path.join(args.get("table_def_file"), f"{table_definition}.json"),
-                "w",
-            ) as outfile:
-                outfile.write(json.dumps(table_def_content))
 
-            logger.info(
-                f'table definition created "{table_definition}.json" - {pop_stack()}'
-            )
+            # skip table definition and don't add table to
+            # build config of td table
+            if WriteDisposition[task.parameters.get("write_disposition")] in [
+                WriteDisposition.WRITEAPPEND,
+                WriteDisposition.WRITETRUNCATE,
+            ]:
+                logger.info(f'creating artifacts for "{task.task_id}" - {pop_stack()}')
+                table_def_content = [
+                    {
+                        "name": field.name,
+                        "type": field.data_type,
+                        "mode": "nullable" if field.nullable else "required",
+                    }
+                    for field in task.parameters["source_to_target"]
+                ]
 
-            tables = [
-                field.source_name
-                for field in task.parameters["source_to_target"]
-                if field.source_name
-                and re.search(r"_tds_", field.source_name, re.IGNORECASE)
-            ]
-
-            pattern = r"(\w+_tds_\w+\.\w+)\."
-            if task.parameters["joins"]:
-                for join in task.parameters["joins"]:
-                    for condition in join.on:
-                        tables.extend(
-                            re.findall(
-                                pattern, " ".join(condition.fields), re.IGNORECASE
-                            )
-                        )
-            if task.parameters["where"]:
-                for condition in task.parameters["where"]:
-                    tables.extend(
-                        re.findall(pattern, " ".join(condition.fields), re.IGNORECASE)
-                    )
-
-            tables = set(tables)
-
-            table_build_config = [
-                {
-                    "object_name": table_definition,
-                    "object_type": "type",
-                    "dataset_name": ifnull(
-                        task.parameters["destination_dataset"],
-                        config["properties"]["dataset_publish"],
+                with open(
+                    os.path.join(
+                        args.get("table_def_file"), f"{table_definition}.json"
                     ),
-                    "def_file": f"{table_definition}.json",
-                }
-            ]
+                    "w",
+                ) as outfile:
+                    outfile.write(json.dumps(table_def_content))
+
+                logger.info(
+                    f'table definition created "{table_definition}.json" - {pop_stack()}'
+                )
+
+                tables = []
+                # for each source table, remove alias to create a unique list
+                # even if we use the same source more than once
+                for key in task.parameters["source_tables"].keys():
+                    table = task.parameters["source_tables"][key]
+                    table.alias = ""
+                    if (
+                        re.search(
+                            r"_tds_",
+                            table.dataset_name
+                            if table.dataset_name
+                            else config.get("properties", {}).get("dataset_source"),
+                            re.IGNORECASE,
+                        )
+                        and table not in tables
+                    ):
+                        tables.append(table)
+
+                table_build_config = [
+                    {
+                        "object_name": table_definition,
+                        "object_type": "type",
+                        "dataset_name": ifnull(
+                            task.parameters["destination_dataset"],
+                            config.get("properties", {}).get("dataset_publish"),
+                        ),
+                        "def_file": f"{table_definition}.json",
+                    }
+                ]
+            else:
+                table_build_config = []
 
             table_build_config.extend(
                 [
                     {
-                        "object_name": table.split(".")[1],
+                        "object_name": table.table_name,
                         "object_type": "view",
-                        "dataset_name": table.split(".")[0],
+                        "dataset_name": table.dataset_name,
                         "def_file": "select_all_from_tab.sql",
                         "src_env_override": True,
                         "query_vars": [
@@ -148,16 +158,16 @@ def buildartifacts(logger: ILogger, args: dict, config: dict) -> int:
                                 "project_id": re.sub(
                                     r"(-\w+$)",
                                     "-ENV",
-                                    task.parameters.get(
-                                        "source_project_override", {}
-                                    ).get(
-                                        table, config["properties"]["source_project"]
+                                    table.source_project
+                                    if table.source_project
+                                    else config.get("properties", {}).get(
+                                        "source_project"
                                     ),
                                     re.IGNORECASE,
                                 )
                             },
-                            {"data_set": table.split(".")[0]},
-                            {"table_name": table.split(".")[1]},
+                            {"data_set": table.dataset_name},
+                            {"table_name": table.table_name},
                         ],
                     }
                     for table in tables
