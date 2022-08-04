@@ -121,7 +121,7 @@ class SourceTable(object):
     def __str__(self) -> str:
         """
         The function returns a string that is the dataset name, table name, and alias of the table
-        
+
         Returns:
           The name of the dataset, the name of the table, and the alias.
         """
@@ -131,14 +131,15 @@ class SourceTable(object):
         """
         The function returns true if the source_project, dataset_name, table_name, and alias of the two
         objects are equal
-        
+
         Args:
           other: The other object to compare to.
-        
+
         Returns:
           A boolean value.
         """
-        return (self.source_project == other.source_project
+        return (
+            self.source_project == other.source_project
             and self.dataset_name == other.dataset_name
             and self.table_name == other.table_name
             and self.alias == other.alias
@@ -147,10 +148,10 @@ class SourceTable(object):
     def __ne__(self, other) -> bool:
         """
         If the two objects are not equal, return True. Otherwise, return False
-        
+
         Args:
           other: The other object to compare to.
-        
+
         Returns:
           The return value is a boolean value.
         """
@@ -1601,10 +1602,10 @@ def converttoobj(
                 name=field.get("name"),
                 source_column=field.get("source_column"),
                 source_table=SourceTable(
-                    source_project=field.get("source_table",{}).get("source_project"),
-                    dataset_name=field.get("source_table",{}).get("dataset_name"),
-                    table_name=field.get("source_table",{}).get("table_name"),
-                    alias=field.get("source_table",{}).get("alias"),
+                    source_project=field.get("source_table", {}).get("source_project"),
+                    dataset_name=field.get("source_table", {}).get("dataset_name"),
+                    table_name=field.get("source_table", {}).get("table_name"),
+                    alias=field.get("source_table", {}).get("alias"),
                 )
                 if field.get("source_table")
                 else None,
