@@ -6,7 +6,7 @@ from typing import Union
 from unittest.util import strclass
 from warnings import warn
 
-from lib.helper import ifnull, isnullorwhitespace
+from lib.helper import isnullorwhitespace
 
 __all__ = [
     "Condition",
@@ -742,15 +742,17 @@ class OrderField(Field):
         hk: bool = None,
         is_desc: bool = None,
     ) -> None:
+        super().__init__(
+            name,
+            data_type,
+            source_column,
+            source_table,
+            transformation,
+            nullable,
+            pk,
+            hk,
+        )
 
-        self._transformation = transformation
-        self._source_column = source_column
-        self._source_table = source_table
-        self._name = name
-        self._data_type = data_type
-        self._nullable = nullable
-        self._pk = pk
-        self._hk = hk
         self._is_desc = is_desc
 
     @property

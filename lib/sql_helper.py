@@ -904,7 +904,7 @@ def create_update_query(logger: ILogger, task: UpdateTask) -> str:
 
         if f.transformation:
             source = f.transformation
-        target = target = f"trg.{f.name.ljust(pad)}"
+        target = f"trg.{f.name.ljust(pad)}"
 
         st.append(f"{prefix}{target} = {source}")
 
@@ -974,7 +974,6 @@ def create_sql_conditions(logger: ILogger, task: SQLTask) -> dict:
     """
     logger.info(f"{pop_stack()} - STARTED".center(100, "-"))
 
-    i = 1
     frm = [f"  from {task.parameters.driving_table} {DEFAULT_SOURCE_ALIAS}"]
     logger.info(f"{pop_stack()} - identifying join conditions")
     if task.parameters.joins:
