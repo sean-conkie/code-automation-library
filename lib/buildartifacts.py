@@ -107,7 +107,9 @@ def buildartifacts(logger: ILogger, args: dict, config: dict) -> int:
                     ),
                     "w",
                 ) as outfile:
-                    outfile.write(json.dumps(table_def_content))
+                    outfile.write(
+                        json.dumps(table_def_content, indent=4, sort_keys=True)
+                    )
 
                 logger.info(
                     f'table definition created "{table_definition}.json" - {pop_stack()}'
@@ -177,7 +179,7 @@ def buildartifacts(logger: ILogger, args: dict, config: dict) -> int:
             with open(
                 os.path.join(args.get("table_cfg"), f"cfg_{table_definition}.json"), "w"
             ) as outfile:
-                outfile.write(json.dumps(table_build_config))
+                outfile.write(json.dumps(table_build_config, indent=4, sort_keys=True))
 
             logger.info(
                 f'table build config created "cfg_{table_definition}.json" - {pop_stack()}'
