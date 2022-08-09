@@ -80,7 +80,7 @@ def create_parameters(path: str = None) -> dict:
     if path and not os.path.exists(path):
         raise FileNotFoundError
 
-    cfg = get_json(logger, path) if path else {}
+    cfg = get_json(ILogger("config", None, "DEBUG"), path) if path else {}
 
     log_default = ifnull(os.environ.get("SYS_LOG"), "./batch_application/logs/")
     config_default = "./bq_application/job/"
@@ -92,7 +92,7 @@ def create_parameters(path: str = None) -> dict:
     batch_sql_default = ifnull(
         os.environ.get("SYS_LOG"), "./batch_application/scripts/sql/"
     )
-    table_def_file_default = "./bq_application/table/"
+    table_def_file_default = "./bq_application/tables/"
     table_cfg_default = "./bq_application/cfg/"
     project_id = os.environ.get("PROJECT_ID")
 
@@ -110,6 +110,7 @@ def create_parameters(path: str = None) -> dict:
         "project_id": cfg.get("logs", project_id),
         "debug_level": cfg.get("debug_level", "DEBUG"),
     }
+
     return parameters
 
 
