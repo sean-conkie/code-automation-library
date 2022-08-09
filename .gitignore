@@ -8,3 +8,4 @@ __pycache__/
 # files
 *.log
 *.zip
+config_buildjobs.json
