@@ -136,7 +136,7 @@ def buildartifacts(logger: ILogger, args: dict, config: dict) -> int:
                 table_build_config = [
                     {
                         "object_name": table_definition,
-                        "object_type": "type",
+                        "object_type": "table",
                         "dataset_name": ifnull(
                             task.parameters["destination_dataset"],
                             config.get("properties", {}).get("dataset_publish"),
