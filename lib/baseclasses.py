@@ -1673,7 +1673,7 @@ def converttoobj(
                 if field.get("source_table")
                 else None,
                 transformation=field.get("transformation"),
-                nullable=field.get("nullable"),
+                nullable=field.get("is_nullable"),
                 pk=field.get("is_primary_key"),
                 hk=field.get("is_history_key"),
             )
