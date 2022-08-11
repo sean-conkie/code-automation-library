@@ -1,4 +1,5 @@
 import black
+import json
 import os
 import pathlib
 
@@ -12,7 +13,7 @@ from lib.baseclasses import (
 )
 
 from jinja2 import Environment, FileSystemLoader
-from lib.logger import ILogger, pop_stack
+from lib.logger import format_message, ILogger
 from lib.sql_helper import create_sql_file
 from shutil import copy
 
@@ -35,11 +36,11 @@ def builddags(logger: ILogger, args: dict, config: dict) -> int:
       0
     """
 
-    logger.info(f"dag files - {pop_stack()} STARTED".center(100, "-"))
+    logger.info(format_message(f"dag files STARTED".center(100, "-")))
 
     # for config file provided use the content of the JSON to create
     # the python statements needed to be inserted into the template
-    logger.info(f"building dag - {config['name']}")
+    logger.info(format_message(f"building dag - {config['name']}"))
 
     dag_string = create_dag_string(
         logger,
@@ -64,7 +65,7 @@ def builddags(logger: ILogger, args: dict, config: dict) -> int:
             t.get("dependencies"),
             t.get("description"),
         )
-        logger.info(f'creating task "{task.task_id}" - {pop_stack()}')
+        logger.info(format_message(f'creating task "{task.task_id}"'))
         if task.operator == TaskOperator.CREATETABLE.name:
             # for each task, add a new one to config["tasks"] with data check tasks.
             if (
@@ -140,7 +141,7 @@ def builddags(logger: ILogger, args: dict, config: dict) -> int:
         if key not in ["tags", "args", "imports"]
     ]
 
-    logger.info(f"populating template")
+    logger.info(format_message(f"populating template"))
     file_loader = FileSystemLoader("./templates")
     env = Environment(loader=file_loader)
 
@@ -163,7 +164,7 @@ def builddags(logger: ILogger, args: dict, config: dict) -> int:
     with open(dag_file, "w") as outfile:
         outfile.write(reformatted)
 
-    logger.info(f"dag files {pop_stack()} COMPLETED SUCCESSFULLY".center(100, "-"))
+    logger.info(format_message(f"dag files COMPLETED SUCCESSFULLY".center(100, "-")))
     return 0
 
 
@@ -179,7 +180,7 @@ def create_data_check_tasks(logger: ILogger, task: Task, properties: dict) -> li
     Returns:
       A list of data check tasks.
     """
-    logger.info(f"{pop_stack()} STARTED".center(100, "-"))
+    logger.info(format_message(f"STARTED".center(100, "-")))
     data_check_tasks = []
 
     table_keys = [
@@ -251,7 +252,7 @@ def create_data_check_tasks(logger: ILogger, task: Task, properties: dict) -> li
         )
         data_check_tasks.append(todict(dupe_check_task))
 
-    logger.info(f"dag files {pop_stack()} COMPLETED SUCCESSFULLY".center(100, "-"))
+    logger.info(f"dag files COMPLETED SUCCESSFULLY".center(100, "-"))
     return data_check_tasks
 
 
@@ -277,7 +278,7 @@ def create_gcs_load_task(logger: ILogger, task: Task, properties: dict) -> dict:
         skip_leading_rows
         schema_object
     """
-    logger.info(f"{pop_stack()} STARTED".center(100, "-"))
+    logger.info(f"STARTED".center(100, "-"))
     gs_source_bucket = (
         "{gs_source_bucket}"
         if not "bucket" in task.parameters.keys()
@@ -317,11 +318,13 @@ def create_gcs_load_task(logger: ILogger, task: Task, properties: dict) -> dict:
     schema_target = os.path.normpath(f"dags/{schema_object}")
     if not os.path.isfile(schema_source):
         logger.debug(f"      task id: {task.task_id}")
-        logger.debug(f'schema object: {task.parameters["schema_object"]}')
+        logger.debug(
+            f'schema object: {json.dumps(task.parameters["schema_object"], indent=4)}'
+        )
         raise FileNotFoundError(f"'{schema_source}' not found.")
     # if schema file doesn't exist in dags/schema/ dir then copy it
     if not os.path.isfile(schema_target) and os.path.isfile(schema_source):
-        logger.debug(f"Copying {schema_source} to {schema_target}")
+        logger.debug(format_message(f"Copying {schema_source} to {schema_target}"))
         copy(
             schema_source,
             schema_target,
@@ -351,7 +354,7 @@ def create_gcs_load_task(logger: ILogger, task: Task, properties: dict) -> dict:
         "schema_object": schema_object,
     }
 
-    logger.info(f"{pop_stack()} COMPLETED SUCCESSFULLY".center(100, "-"))
+    logger.info(f"COMPLETED SUCCESSFULLY".center(100, "-"))
     return outp
 
 
@@ -378,7 +381,7 @@ def create_table_task(
         - params
     """
 
-    logger.info(f"{pop_stack()} STARTED".center(100, "-"))
+    logger.info(f"STARTED".center(100, "-"))
     dataset_staging = properties["dataset_staging"]
     dataset_publish = (
         "{dataset_publish}"
@@ -419,7 +422,7 @@ def create_table_task(
         "params": {"dataset_publish": dataset_publish},
     }
 
-    logger.info(f"{pop_stack()} COMPLETED SUCCESSFULLY".center(100, "-"))
+    logger.info(f"COMPLETED SUCCESSFULLY".center(100, "-"))
     return outp
 
 
@@ -434,10 +437,10 @@ def create_task(logger: ILogger, task: Task) -> str:
     Returns:
       A string that can be used to create a task in Airflow
     """
-    logger.info(f"{pop_stack()} STARTED".center(100, "-"))
+    logger.info(f"STARTED".center(100, "-"))
     logger.debug(
         f"""creating task {task.task_id} from:
-                               parameters - {task.parameters}"""
+                               parameters - {json.dumps(task.parameters, indent=4)}"""
     )
 
     outp = [f"{task.task_id} = {task.operator} (task_id='{task.task_id}'"]
@@ -466,7 +469,7 @@ def create_task(logger: ILogger, task: Task) -> str:
         outp.append(f"{key} = {value}")
     outp.append("dag=dag)")
 
-    logger.info(f"{pop_stack()} COMPLETED SUCCESSFULLY".center(100, "-"))
+    logger.info(f"COMPLETED SUCCESSFULLY".center(100, "-"))
     return ",\n          ".join(outp)
 
 
@@ -483,7 +486,7 @@ def create_dag_string(logger: ILogger, name: str, dag: dict) -> str:
     Returns:
       A string that is the DAG definition
     """
-    logger.info(f"{pop_stack()} STARTED".center(100, "-"))
+    logger.info(f"STARTED".center(100, "-"))
     # we first set DAG defaults - these can also be excluded completely and
     # use Environment settings
     odag = {
@@ -515,7 +518,7 @@ def create_dag_string(logger: ILogger, name: str, dag: dict) -> str:
 
     outp = f"'{name}',{', '.join([f'{key} = {odag[key]}' for key in odag.keys()])}"
 
-    logger.info(f"{pop_stack()} COMPLETED SUCCESSFULLY".center(100, "-"))
+    logger.info(f"COMPLETED SUCCESSFULLY".center(100, "-"))
     return outp
 
 
@@ -531,7 +534,7 @@ def create_dag_args(logger: ILogger, args: dict) -> str:
     Returns:
       A string that is a dictionary of the arguments for the DAG.
     """
-    logger.info(f"{pop_stack()} STARTED".center(100, "-"))
+    logger.info(f"STARTED".center(100, "-"))
     oargs = {
         "depends_on_past": False,
         "email_on_failure": False,
@@ -578,5 +581,5 @@ def create_dag_args(logger: ILogger, args: dict) -> str:
     )
     outp = f"{{{outstr}}}"
 
-    logger.info(f"{pop_stack()} COMPLETED SUCCESSFULLY".center(100, "-"))
+    logger.info(f"COMPLETED SUCCESSFULLY".center(100, "-"))
     return outp

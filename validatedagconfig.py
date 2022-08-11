@@ -6,7 +6,7 @@ import traceback
 
 from datetime import datetime
 from lib.jsonhelper import IJSONValidate, get_json
-from lib.logger import ILogger, pop_stack
+from lib.logger import format_message, ILogger
 
 
 def main(logger: ILogger, args: argparse.Namespace):
@@ -27,16 +27,16 @@ def main(logger: ILogger, args: argparse.Namespace):
         dpath = os.path.normpath(args.config_directory)
         config_list = []
         try:
-            logger.info(f"{pop_stack()} - creating config list")
+            logger.info(f"creating config list")
             for filename in os.listdir(dpath):
-                logger.debug(f"filename: {filename}")
+                logger.debug(format_message(f"filename: {filename}"))
                 m = re.search(r"^cfg_.*\.json$", filename, re.IGNORECASE)
                 if m:
                     p = os.path.normpath(f"{dpath}/{filename}")
                     config_list.append(p)
         except:
-            logger.error(f"{pop_stack()} - {sys.exc_info()[0]:}")
-            logger.info(f"{pop_stack()} - Config Validate FAILED")
+            logger.error(f"{sys.exc_info()[0]:}")
+            logger.info(f"Config Validate FAILED")
             return 1
 
     elif args.config_list:
@@ -48,7 +48,7 @@ def main(logger: ILogger, args: argparse.Namespace):
 
     for c in config_list:
         cpath = c.strip()
-        logger.info(f"{pop_stack()} - validating file: {cpath}")
+        logger.info(format_message(f"validating file: {cpath}"))
         config = get_json(logger, cpath)
         if not config:
             return 1
@@ -57,22 +57,20 @@ def main(logger: ILogger, args: argparse.Namespace):
         if not schema:
             return 1
 
-        logger.info(f"{pop_stack()} - validate schema object")
+        logger.info(f"validate schema object")
         result = IJSONValidate(logger, schema, config)
         if not result:
             exit_code = 1
 
         if result and "properties" in config.keys():
-            logger.info(f"{pop_stack()} - validate properties object")
+            logger.info(f"validate properties object")
             if config.get("type") == "BATCH":
                 properties_schema = get_json(
                     logger, "./bq_application/job/schema_cfg_batch_properties.json"
                 )
 
                 if properties_schema:
-                    logger.debug(
-                        f"{pop_stack()} - validating properties: {config.get('type')}"
-                    )
+                    logger.debug(f"validating properties: {config.get('type')}")
                     properties_check_result = IJSONValidate(
                         logger, properties_schema, config.get("properties", {})
                     )
@@ -81,11 +79,11 @@ def main(logger: ILogger, args: argparse.Namespace):
 
                 else:
                     logger.debug(
-                        f"{pop_stack()} - skipped properties validation ({config.get('type', '<missing job type>')})"
+                        f"skipped properties validation ({config.get('type', '<missing job type>')})"
                     )
 
         if result and "tasks" in config.keys():
-            logger.info(f"{pop_stack()} - validate task object(s)")
+            logger.info(f"validate task object(s)")
             for t in config["tasks"]:
                 task_schema = None
                 if t["operator"] == "CREATETABLE":
@@ -94,26 +92,28 @@ def main(logger: ILogger, args: argparse.Namespace):
                     )
 
                 if task_schema:
-                    logger.debug(f"{pop_stack()} - validating task: {t['task_id']}")
+                    logger.debug(f"validating task: {t['task_id']}")
                     task_check_result = IJSONValidate(logger, task_schema, t)
                     if not task_check_result:
                         exit_code = 1
                 else:
                     logger.debug(
-                        f"{pop_stack()} - skipped task: {t['task_id'] if 'task_id' in t.keys() else '<missing task id>'} ({t['operator'] if 'operator' in t.keys() else '<missing task operator>'})"
+                        format_message(
+                            f"skipped task: {t['task_id'] if 'task_id' in t.keys() else '<missing task id>'} ({t['operator'] if 'operator' in t.keys() else '<missing task operator>'})"
+                        )
                     )
         else:
-            logger.info(f"{pop_stack()} - task validation skipped")
+            logger.info(f"task validation skipped")
             skip_reason = (
                 "No tasks to validate."
                 if result
                 else f"Object schema validation failed"
             )
-            logger.debug(f"{pop_stack()} - task validation skipped: {skip_reason}")
+            logger.debug(f"task validation skipped: {skip_reason}")
 
     if exit_code != 0:
         logger.error(
-            f"{pop_stack()} - One or more files have failed validation, check logs for more information."
+            f"One or more files have failed validation, check logs for more information."
         )
 
     logger.info(f"Config Validate COMPLETED SUCCESSFULLY".center(100, "-"))

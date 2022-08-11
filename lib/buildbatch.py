@@ -12,7 +12,7 @@ from lib.baseclasses import (
 from datetime import datetime
 from jinja2 import Environment, FileSystemLoader
 from lib.helper import FileType, format_description
-from lib.logger import ILogger, pop_stack
+from lib.logger import format_message, ILogger
 from lib.sql_helper import create_sql_file
 
 __all__ = [
@@ -41,11 +41,11 @@ def buildbatch(logger: ILogger, args: dict, config: dict) -> int:
       0
     """
 
-    logger.info(f"batch files - {pop_stack()} STARTED".center(100, "-"))
+    logger.info(f"batch files - STARTED".center(100, "-"))
 
     # for config file provided use the content of the JSON to create
     # the statements needed to be inserted into the template
-    logger.info(f"building process - {config['name']}")
+    logger.info(format_message(f"building process - {config['name']}"))
 
     tasks = []
     scripts = []
@@ -61,7 +61,7 @@ def buildbatch(logger: ILogger, args: dict, config: dict) -> int:
             t.get("dependencies"),
             t.get("description"),
         )
-        logger.info(f'creating task "{task.task_id}" - {pop_stack()}')
+        logger.info(f'creating task "{task.task_id}"')
         if task.operator == TaskOperator.CREATETABLE.name:
             # for each task, add a new one to config["tasks"] with data check tasks.
             if not task.parameters.get("block_data_check"):
@@ -73,7 +73,7 @@ def buildbatch(logger: ILogger, args: dict, config: dict) -> int:
                         config["tasks"].append(d)
 
         sub_process = create_table_task(
-            logger, task, config.get("properties", {}), args
+            logger, task, config.get("properties", {}), args, config["name"]
         )
 
         SUB_PROCESS_DICT[sub_process] = i
@@ -86,7 +86,7 @@ def buildbatch(logger: ILogger, args: dict, config: dict) -> int:
             ).upper()
             d_file = d.replace(config.get("properties", {}).get("prefix", "") + "_", "")
 
-            DEPENDENCIES.extend([(sub_process, f"'{d_sub_process}|{d_file}|Y'\\")])
+            DEPENDENCIES.extend([(sub_process, f"'{d_sub_process}|{d_file}|Y '\\")])
 
     if len(DEPENDENCIES) > 0:
         logger.info(f"calculating dependencies")
@@ -114,7 +114,7 @@ def buildbatch(logger: ILogger, args: dict, config: dict) -> int:
         tasks=format_description(" ".join(tasks), "", FileType.SH),
         description=format_description(task.description, "Description", FileType.SH),
         scripts=format_description(" ".join(scripts), "", FileType.SH),
-        cut=len(config.get("properties", {}).get("prefix") + "_") + 1,
+        cut=len(config.get("properties", {}).get("prefix") + "_"),
         sub_process_list=re.sub(
             r"(\\$(?!\n))",
             "",
@@ -128,7 +128,7 @@ def buildbatch(logger: ILogger, args: dict, config: dict) -> int:
     with open(scr_file, "w") as outfile:
         outfile.write(scr_output)
 
-    logger.info(f"Job file created: {config['name']}.sh")
+    logger.info(format_message(f"Job file created: {config['name']}.sh"))
 
     pct_template = env.get_template("template_pct.txt")
     pct_output = pct_template.render(
@@ -141,9 +141,9 @@ def buildbatch(logger: ILogger, args: dict, config: dict) -> int:
     with open(pct_file, "w") as outfile:
         outfile.write(pct_output)
 
-    logger.info(f"Pop control file created: pct_{config['name']}.sh")
+    logger.info(format_message(f"Pop control file created: pct_{config['name']}.sh"))
 
-    logger.info(f"batch files {pop_stack()} COMPLETED SUCCESSFULLY".center(100, "-"))
+    logger.info(f"batch files COMPLETED SUCCESSFULLY".center(100, "-"))
     return 0
 
 
@@ -159,7 +159,7 @@ def create_data_check_tasks(logger: ILogger, task: Task, properties: dict) -> li
     Returns:
       A list of data check tasks.
     """
-    logger.info(f"{pop_stack()} STARTED".center(100, "-"))
+    logger.info(f"STARTED".center(100, "-"))
     data_check_tasks = []
 
     table_keys = [
@@ -231,15 +231,12 @@ def create_data_check_tasks(logger: ILogger, task: Task, properties: dict) -> li
         )
         data_check_tasks.append(todict(dupe_check_task))
 
-    logger.info(f"dag files {pop_stack()} COMPLETED SUCCESSFULLY".center(100, "-"))
+    logger.info(f"dag files COMPLETED SUCCESSFULLY".center(100, "-"))
     return data_check_tasks
 
 
 def create_table_task(
-    logger: ILogger,
-    task: Task,
-    properties: dict,
-    args: dict,
+    logger: ILogger, task: Task, properties: dict, args: dict, job_name: str
 ) -> dict:
     """
     It creates a SQL file for the task, and returns a string that will be used to create a SQL file for
@@ -256,7 +253,7 @@ def create_table_task(
       The task_id is being returned.
     """
 
-    logger.info(f"{pop_stack()} STARTED".center(100, "-"))
+    logger.info(f"STARTED".center(100, "-"))
     dataset_staging = properties.get("dataset_staging")
 
     if not task.parameters.get("sql"):
@@ -270,16 +267,17 @@ def create_table_task(
             task,
             file_path=args.get("batch_sql"),
             dataset_staging=dataset_staging,
+            job_id=job_name,
         )
 
-    outp = f"'{task.task_id.replace(properties.get('prefix','') + '_', '').upper()}|{task.task_id.replace(properties.get('prefix','') + '_', '')}|Y'\\"
+    outp = f"'{task.task_id.replace(properties.get('prefix','') + '_', '').upper()}|{task.task_id.replace(properties.get('prefix','') + '_', '')}|Y '\\"
 
-    logger.info(f"{pop_stack()} COMPLETED SUCCESSFULLY".center(100, "-"))
+    logger.info(f"COMPLETED SUCCESSFULLY".center(100, "-"))
     return outp
 
 
 def dependency_re_order(logger: ILogger, dependant_pair: tuple):
-    logger.info(f"{pop_stack()} STARTED".center(100, "-"))
+    logger.info(f"STARTED".center(100, "-"))
     if SUB_PROCESS_DICT[dependant_pair[0]] < SUB_PROCESS_DICT[dependant_pair[1]]:
         logger.info(f"Ordering pair {dependant_pair}")
         SUB_PROCESS_DICT[dependant_pair[0]] = SUB_PROCESS_DICT[dependant_pair[1]] + 1
@@ -289,5 +287,5 @@ def dependency_re_order(logger: ILogger, dependant_pair: tuple):
                 logger.info(f"Re-calculating impacted dependencies")
                 dependency_re_order(logger, dep)
 
-    logger.info(f"batch files {pop_stack()} COMPLETED SUCCESSFULLY".center(100, "-"))
+    logger.info(f"batch files COMPLETED SUCCESSFULLY".center(100, "-"))
     return 0

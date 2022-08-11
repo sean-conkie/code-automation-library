@@ -1,7 +1,9 @@
-import inspect
-import os
+import re
 
-__all__ = ["ILogger", "pop_stack"]
+__all__ = [
+    "ILogger",
+    "format_message",
+]
 
 from logging import Logger, NOTSET, Formatter, FileHandler, StreamHandler
 
@@ -21,7 +23,9 @@ class ILogger(Logger):
           The return value is the exit code of the function.
         """
         Logger.__init__(self, name, level)
-        formatter = Formatter("%(asctime)s - %(name)s - [%(levelname)s] - %(message)s")
+        formatter = Formatter(
+            "%(asctime)s - %(name)s - [%(levelname)8s] - %(funcName)20s:%(lineno)5d - %(message)s"
+        )
 
         streamHandler = StreamHandler()
         streamHandler.setFormatter(formatter)
@@ -34,14 +38,32 @@ class ILogger(Logger):
         self.addHandler(streamHandler)
 
 
-def pop_stack() -> str:
-    """
-    It returns the name of the file and function that called it
+def format_message(message: str) -> str:
+    if message:
 
-    Returns:
-      The name of the file and the function that called the function.
-    """
-    frame = inspect.stack()[1]
-    module = inspect.getmodule(frame[0])
-    filename = module.__file__
-    return f"file: {os.path.basename(filename)} - method: {frame[3]}"
+        m = re.findall(r"([^\s]+)", message, re.IGNORECASE)
+
+        prefix = "".ljust(79)
+        lines = []
+        line = []
+        line_length = 180
+        line_length_cnt = len(prefix)
+        for word in m:
+            if (line_length_cnt + len(word) + len(line)) < line_length:
+                line.append(word)
+                line_length_cnt += len(word)
+            else:
+                lines.append(line)
+                line = [prefix, word.strip()]
+                line_length_cnt = len(word) + 20
+
+        if not line in lines:
+            lines.append(line)
+
+        joined_lines = []
+        for line in lines:
+            joined_lines.append(" ".join(line))
+
+        return "\n".join(joined_lines)
+
+    return ""
