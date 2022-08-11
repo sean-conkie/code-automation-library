@@ -318,7 +318,9 @@ def create_gcs_load_task(logger: ILogger, task: Task, properties: dict) -> dict:
     schema_target = os.path.normpath(f"dags/{schema_object}")
     if not os.path.isfile(schema_source):
         logger.debug(f"      task id: {task.task_id}")
-        logger.debug(f'schema object: {json.dumps(task.parameters["schema_object"], indent=4)}')
+        logger.debug(
+            f'schema object: {json.dumps(task.parameters["schema_object"], indent=4)}'
+        )
         raise FileNotFoundError(f"'{schema_source}' not found.")
     # if schema file doesn't exist in dags/schema/ dir then copy it
     if not os.path.isfile(schema_target) and os.path.isfile(schema_source):

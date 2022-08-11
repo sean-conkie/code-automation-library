@@ -73,7 +73,7 @@ def buildbatch(logger: ILogger, args: dict, config: dict) -> int:
                         config["tasks"].append(d)
 
         sub_process = create_table_task(
-            logger, task, config.get("properties", {}), args, config['name']
+            logger, task, config.get("properties", {}), args, config["name"]
         )
 
         SUB_PROCESS_DICT[sub_process] = i
@@ -236,11 +236,7 @@ def create_data_check_tasks(logger: ILogger, task: Task, properties: dict) -> li
 
 
 def create_table_task(
-    logger: ILogger,
-    task: Task,
-    properties: dict,
-    args: dict,
-    job_name: str
+    logger: ILogger, task: Task, properties: dict, args: dict, job_name: str
 ) -> dict:
     """
     It creates a SQL file for the task, and returns a string that will be used to create a SQL file for
@@ -271,7 +267,7 @@ def create_table_task(
             task,
             file_path=args.get("batch_sql"),
             dataset_staging=dataset_staging,
-            job_id=job_name
+            job_id=job_name,
         )
 
     outp = f"'{task.task_id.replace(properties.get('prefix','') + '_', '').upper()}|{task.task_id.replace(properties.get('prefix','') + '_', '')}|Y '\\"
