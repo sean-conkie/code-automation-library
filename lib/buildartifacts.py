@@ -4,7 +4,7 @@ import re
 
 from lib.baseclasses import converttoobj, ConversionType, Field, Task, WriteDisposition
 from lib.helper import ifnull
-from lib.logger import ILogger, pop_stack
+from lib.logger import format_message, ILogger
 
 __all__ = [
     "buildartifacts",
@@ -25,11 +25,11 @@ def buildartifacts(logger: ILogger, args: dict, config: dict) -> int:
     Returns:
       The return value is the exit code of the function.
     """
-    logger.info(f"buildartifacts - {pop_stack()} STARTED".center(100, "-"))
+    logger.info(format_message(f"buildartifacts - STARTED".center(100, "-")))
 
     # for config file provided use the content of the JSON to create
     # the statements needed to be inserted into the template
-    logger.info(f"creating object artifacts - {config['name']}")
+    logger.info(format_message(f"creating object artifacts - {config['name']}"))
 
     # for each item in the task array, check the operator type and use this
     # to determine the task parameters to be used
@@ -52,10 +52,28 @@ def buildartifacts(logger: ILogger, args: dict, config: dict) -> int:
         )
 
         dw_index = 1
-        for i, field in enumerate(task.parameters["source_to_target"]):
-            if not field.pk:
-                dw_index = i
-                break
+
+        if task.parameters.get("target_type") == "TYPE1":
+            for i, field in enumerate(task.parameters["source_to_target"]):
+                if not field.pk:
+                    dw_index = i + 1
+                    break
+        else:
+            to_index = 5
+            for i, field in enumerate(task.parameters["source_to_target"]):
+                if field.name == "effective_from_dt_seq":
+                    to_index = i + 1
+                    break
+
+            task.parameters["source_to_target"].insert(
+                to_index,
+                Field(
+                    name="effective_to_dt",
+                    data_type="TIMESTAMP",
+                    nullable=False,
+                ),
+            )
+
         task.parameters["source_to_target"].insert(
             dw_index,
             Field(
@@ -91,7 +109,7 @@ def buildartifacts(logger: ILogger, args: dict, config: dict) -> int:
                 WriteDisposition.WRITEAPPEND,
                 WriteDisposition.WRITETRUNCATE,
             ]:
-                logger.info(f'creating artifacts for "{task.task_id}" - {pop_stack()}')
+                logger.info(format_message(f'creating artifacts for "{task.task_id}"'))
                 table_def_content = [
                     {
                         "name": field.name,
@@ -112,7 +130,9 @@ def buildartifacts(logger: ILogger, args: dict, config: dict) -> int:
                     )
 
                 logger.info(
-                    f'table definition created "{table_definition}.json" - {pop_stack()}'
+                    format_message(
+                        f'table definition created "{table_definition}.json"'
+                    )
                 )
 
                 tables = []
@@ -182,8 +202,12 @@ def buildartifacts(logger: ILogger, args: dict, config: dict) -> int:
                 outfile.write(json.dumps(table_build_config, indent=4, sort_keys=True))
 
             logger.info(
-                f'table build config created "cfg_{table_definition}.json" - {pop_stack()}'
+                format_message(
+                    f'table build config created "cfg_{table_definition}.json"'
+                )
             )
 
-    logger.info(f"buildartifacts {pop_stack()} COMPLETED SUCCESSFULLY".center(100, "-"))
+    logger.info(
+        format_message(f"buildartifacts COMPLETED SUCCESSFULLY".center(100, "-"))
+    )
     return 0

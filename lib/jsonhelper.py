@@ -3,7 +3,7 @@ import json
 import os
 import sys
 
-from lib.logger import ILogger, pop_stack
+from lib.logger import format_message, ILogger
 
 __all__ = ["IJSONValidate", "get_config"]
 
@@ -17,18 +17,18 @@ def IJSONValidate(logger: ILogger, schema: dict, object: dict) -> bool:
       schema (dict): The schema to validate against.
       object (dict): The object to be validated
     """
-    logger.info(f"{pop_stack()} - STARTED".center(100, "-"))
+    logger.info(f"STARTED".center(100, "-"))
     validate = fastjsonschema.compile(schema)
     try:
-        logger.info(f"{pop_stack()} - validating schema...")
+        logger.info(f"validating schema...")
         validate(object)
     except fastjsonschema.JsonSchemaValueException as e:
         logger.debug(f"{sys.exc_info()[1]:}")
-        logger.error(f"{pop_stack()} - Schema not matching")
-        logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100, "-"))
+        logger.error(f"Schema not matching")
+        logger.info(f"COMPLETED SUCCESSFULLY".center(100, "-"))
         return False
-    logger.info(f"{pop_stack()} - Schema matching")
-    logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100, "-"))
+    logger.info(f"Schema matching")
+    logger.info(f"COMPLETED SUCCESSFULLY".center(100, "-"))
     return True
 
 
@@ -44,12 +44,12 @@ def get_json(logger: ILogger, path: str) -> dict:
       A dictionary object
     """
 
-    logger.info(f"{pop_stack()} - STARTED".center(100, "-"))
+    logger.info(f"STARTED".center(100, "-"))
     if not path:
-        logger.warning(f"{pop_stack()} - File {path:} does not exist.")
+        logger.warning(format_message(f"File {path:} does not exist."))
         return {}
 
-    logger.debug(f"{pop_stack()} - File input {path:}.")
+    logger.debug(format_message(f"File input {path:}."))
 
     try:
         # identify what path is; dir, file
@@ -58,12 +58,12 @@ def get_json(logger: ILogger, path: str) -> dict:
         ):
             raise FileExistsError
     except (FileNotFoundError, FileExistsError) as e:
-        logger.error(f"{pop_stack()} - File {path:} does not exist.")
-        logger.info(f"{pop_stack()} - FAILED".center(100, "-"))
+        logger.error(format_message(f"File {path:} does not exist."))
+        logger.info(f"FAILED".center(100, "-"))
         return None
     except:
         logger.error(f"{sys.exc_info()[0]:}")
-        logger.info(f"{pop_stack()} - FAILED".center(100, "-"))
+        logger.info(f"FAILED".center(100, "-"))
         return None
 
     # read file
@@ -72,9 +72,9 @@ def get_json(logger: ILogger, path: str) -> dict:
             filecontent = sourcefile.read()
 
         # return file
-        logger.info(f"{pop_stack()} - COMPLETED SUCCESSFULLY".center(100, "-"))
+        logger.info(f"COMPLETED SUCCESSFULLY".center(100, "-"))
         return json.loads(filecontent)
     except:
-        logger.error(f"{pop_stack()} - {sys.exc_info()[0]:}")
-        logger.info(f"{pop_stack()} - FAILED".center(100, "-"))
+        logger.error(f"{sys.exc_info()[0]:}")
+        logger.info(f"FAILED".center(100, "-"))
         return None

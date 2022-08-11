@@ -10,6 +10,8 @@ __all__ = [
     "format_description",
 ]
 
+WORD_REGEX_PATTERN = r"([^\s]+)"
+
 
 def isnullorwhitespace(string: str) -> bool:
     """
@@ -79,14 +81,62 @@ class FileType(Enum):
     SQL = 2
 
 
-def format_description(description: str, section: str, target_type: FileType) -> str:
+def format_comment(comment: str, target_type: FileType) -> str:
     """
-    It takes a string, and returns a string
+    It takes a string and a file type and returns a string
 
     Args:
-      description (str): The description of the function
+      comment (str): The comment to format
+      target_type (FileType): The type of file you want to format the comment for.
+
+    Returns:
+      A string with the comment formatted for the target file type.
+    """
+    if target_type == FileType.SH:
+        prefix = "#"
+    elif target_type == FileType.SQL:
+        prefix = "--"
+
+    if comment:
+
+        m = re.findall(WORD_REGEX_PATTERN, comment, re.IGNORECASE)
+
+        lines = []
+        line = [prefix]
+        line_length = 80
+        line_length_cnt = len(prefix)
+        for word in m:
+            if (line_length_cnt + len(word) + len(line)) < line_length:
+                line.append(word)
+                line_length_cnt += len(word)
+            else:
+                lines.append(line)
+                line = [prefix, word.strip()]
+                line_length_cnt = len(word) + 3
+
+        if not line in lines:
+            lines.append(line)
+
+        joined_lines = []
+        for line in lines:
+            joined_lines.append(" ".join(line))
+
+        return "\n".join(joined_lines)
+
+    return prefix
+
+
+def format_description(description: str, section: str, target_type: FileType) -> str:
+    """
+    It takes a description, a section, and a file type and returns a formatted description
+
+    Args:
+      description (str): The description of the function.
       section (str): The section of the script that the description is for.
       target_type (FileType): The type of file you want to generate.
+
+    Returns:
+      A string
     """
     if target_type == FileType.SH:
         prefix = "#"
@@ -104,8 +154,7 @@ def format_description(description: str, section: str, target_type: FileType) ->
         line_prefix = f"{prefix}"
         line_prefix = f"{line_prefix} {':'.rjust(justify - len(line_prefix))}"
 
-        pattern = r"(\b[\w\.]+\b)"
-        m = re.findall(pattern, description, re.IGNORECASE)
+        m = re.findall(WORD_REGEX_PATTERN, description, re.IGNORECASE)
 
         lines = []
         line = [first_line_prefix]

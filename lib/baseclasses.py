@@ -27,9 +27,20 @@ __all__ = [
     "TableType",
     "DEFAULT_SOURCE_ALIAS",
     "SourceTable",
+    "WRITE_DISPOSITION_MAP",
 ]
 
 DEFAULT_SOURCE_ALIAS = "src"
+
+# this maps the intended behaviour to the actual
+# behaviour based on the defined approach for sql
+# mapping WriteDisposition to a string
+WRITE_DISPOSITION_MAP = {
+    0: "WRITE_APPEND",
+    1: "WRITE_TRUNCATE",
+    2: "WRITE_APPEND",
+    3: "DELETE",
+}
 
 
 class ConversionType(Enum):
@@ -79,10 +90,10 @@ class JoinType(Enum):
 
 
 class WriteDisposition(Enum):
-    WRITEAPPEND = "WRITE_APPEND"
-    WRITETRANSIENT = "WRITE_TRUNCATE"
-    WRITETRUNCATE = "WRITE_APPEND"
-    DELETE = "DELETE"
+    WRITEAPPEND = 0
+    WRITETRANSIENT = 1
+    WRITETRUNCATE = 2
+    DELETE = 3
 
 
 class TaskOperator(Enum):
@@ -1303,7 +1314,7 @@ class SQLTask(Task):
             if analytic.column.source_table
             else DEFAULT_SOURCE_ALIAS
         )
-        source_column = analytic.column.name
+        source_column = analytic.column.source_column
         offset = f", {analytic.offset}" if analytic.offset else ""
         default = f", {analytic.default}" if analytic.default else ""
         partition_comma = "," if len(partition.split(",")) > 1 else ""

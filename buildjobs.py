@@ -10,7 +10,7 @@ from lib.buildbatch import buildbatch
 from lib.builddags import builddags
 from lib.helper import ifnull
 from lib.jsonhelper import get_json
-from lib.logger import ILogger, pop_stack
+from lib.logger import format_message, ILogger
 
 
 def main(logger: ILogger, args: dict) -> int:
@@ -26,7 +26,7 @@ def main(logger: ILogger, args: dict) -> int:
       The return value is the exit code of the program.
     """
 
-    logger.info(f"job files - {pop_stack()} STARTED".center(100, "-"))
+    logger.info(f"job files - STARTED".center(100, "-"))
 
     dpath = args.get("config")
     config_list = []
@@ -38,7 +38,7 @@ def main(logger: ILogger, args: dict) -> int:
         config_list.append(dpath)
     else:
         for filename in os.listdir(dpath):
-            logger.debug(f"filename: {filename}")
+            logger.debug(format_message(f"filename: {filename}"))
             m = re.search(r"^cfg_.*\.json$", filename, re.IGNORECASE)
             if m:
                 config_list.append(filename)
@@ -51,18 +51,18 @@ def main(logger: ILogger, args: dict) -> int:
         job_type = cfg.get("type")
         if job_type == "DAG":
             if builddags(logger, args, cfg) != 0:
-                logger.error(f"an error occured processing {path}")
+                logger.error(format_message(f"an error occured processing {path}"))
                 sys.exit(1)
         elif job_type == "BATCH":
             if buildbatch(logger, args, cfg) != 0:
-                logger.error(f"an error occured processing {path}")
+                logger.error(format_message(f"an error occured processing {path}"))
                 sys.exit(1)
         else:
-            logger.error(f"No job type supplied in {path}")
+            logger.error(format_message(f"No job type supplied in {path}"))
 
         buildartifacts(logger, args, cfg)
 
-    logger.info(f"job files {pop_stack()} COMPLETED SUCCESSFULLY".center(100, "-"))
+    logger.info(f"job files COMPLETED SUCCESSFULLY".center(100, "-"))
     return 0
 
 
@@ -138,4 +138,4 @@ if __name__ == "__main__":
     except:
         logger.error(f"{traceback.format_exc():}")
         logger.debug(f"{sys.exc_info()[1]:}")
-        logger.info(f"job files - {pop_stack()} FAILED".center(100, "-"))
+        logger.info(f"job files - FAILED".center(100, "-"))
