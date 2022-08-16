@@ -56,7 +56,7 @@ def buildartifacts(logger: ILogger, args: dict, config: dict) -> int:
         if task.parameters.get("target_type") == "TYPE1":
             for i, field in enumerate(task.parameters["source_to_target"]):
                 if not field.pk:
-                    dw_index = i + 1
+                    dw_index = i
                     break
         else:
             to_index = 5
@@ -103,6 +103,7 @@ def buildartifacts(logger: ILogger, args: dict, config: dict) -> int:
         if task.parameters.get("build_artifacts", True):
             table_definition = task.parameters["destination_table"]
 
+            tables = []
             # skip table definition and don't add table to
             # build config of td table
             if WriteDisposition[task.parameters.get("write_disposition")] in [
@@ -135,7 +136,6 @@ def buildartifacts(logger: ILogger, args: dict, config: dict) -> int:
                     )
                 )
 
-                tables = []
                 # for each source table, remove alias to create a unique list
                 # even if we use the same source more than once
                 for key in task.parameters["source_tables"].keys():

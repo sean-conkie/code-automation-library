@@ -183,7 +183,7 @@ def create_delta_conditions(logger: ILogger, task: SQLTask) -> list[Condition]:
         )
 
         upper_bound = None
-        if delta.lower_bound == "@LOWER_DATE_BOUND":
+        if delta.lower_bound.upper() == "@LOWER_DATE_BOUND":
             upper_bound = "parse_timestamp('%d-%b-%Y %H:%M:%E6S', @upper_date_bound)"
         elif delta.upper_bound:
             upper_bound = (
@@ -256,6 +256,9 @@ def create_type_1_sql(
     sql = []
 
     if len(delta):
+        if wtask.parameters.where is None:
+            wtask.parameters.where = []
+
         for d in delta:
             wtask.parameters.where.append(d)
 
@@ -280,14 +283,15 @@ def create_type_1_sql(
             if not field.pk:
                 dw_index = i + 1
                 break
-        wtask.parameters.source_to_target.insert(
-            dw_index,
-            Field(
-                transformation=f"current_timestamp()",
-                data_type="TIMESTAMP",
-                name="dw_last_modified_dt",
-            ),
-        )
+        if wtask.parameters.write_disposition != WriteDisposition.WRITETRANSIENT:
+            wtask.parameters.source_to_target.insert(
+                dw_index,
+                Field(
+                    transformation=f"current_timestamp()",
+                    data_type="TIMESTAMP",
+                    name="dw_last_modified_dt",
+                ),
+            )
 
         sql.append(create_sql_comment(logger, "Create target table."))
 
@@ -298,7 +302,10 @@ def create_type_1_sql(
         )
     )
 
-    if len(delta):
+    if (
+        len(delta)
+        and task.parameters.write_disposition != WriteDisposition.WRITETRANSIENT
+    ):
         wtask.parameters.driving_table = f"{wtask.parameters.destination_dataset}.{wtask.parameters.destination_table}"
         wtask.parameters.destination_dataset = task.parameters.destination_dataset
         wtask.parameters.destination_table = task.parameters.destination_table
@@ -609,6 +616,9 @@ def create_type_2_sql(
         wtask.add_analytic(analytic)
     delta = create_delta_conditions(logger, task)
     if len(delta):
+        if wtask.parameters.where is None:
+            wtask.parameters.where = []
+
         for d in delta:
             wtask.parameters.where.append(d)
 
