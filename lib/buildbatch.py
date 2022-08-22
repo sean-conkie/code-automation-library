@@ -72,9 +72,9 @@ def buildbatch(logger: ILogger, args: dict, config: dict) -> int:
                     if not d in config["tasks"]:
                         config["tasks"].append(d)
 
-        sub_process = create_table_task(
-            logger, task, config.get("properties", {}), args, config["name"]
-        )
+            sub_process = create_table_task(
+                logger, task, config.get("properties", {}), args, config["name"]
+            )
 
         SUB_PROCESS_DICT[sub_process] = i
         tasks.append(task.task_id)

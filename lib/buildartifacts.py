@@ -53,6 +53,9 @@ def buildartifacts(logger: ILogger, args: dict, config: dict) -> int:
 
         dw_index = 1
 
+        if task.parameters.get("write_disposition") == "DELETE":
+            continue
+
         if task.parameters.get("target_type") == "TYPE1":
             for i, field in enumerate(task.parameters["source_to_target"]):
                 if not field.pk:
@@ -104,13 +107,32 @@ def buildartifacts(logger: ILogger, args: dict, config: dict) -> int:
             table_definition = task.parameters["destination_table"]
 
             tables = []
+            logger.info(format_message(f'creating artifacts for "{task.task_id}"'))
+
+            # for each source table, remove alias to create a unique list
+            # even if we use the same source more than once
+            for key in task.parameters["source_tables"].keys():
+                table = task.parameters["source_tables"][key]
+                table.alias = ""
+                if (
+                    re.search(
+                        r"_tds_",
+                        table.dataset_name
+                        if table.dataset_name
+                        else config.get("properties", {}).get("dataset_source"),
+                        re.IGNORECASE,
+                    )
+                    and table not in tables
+                ):
+                    tables.append(table)
+
             # skip table definition and don't add table to
             # build config of td table
             if WriteDisposition[task.parameters.get("write_disposition")] in [
                 WriteDisposition.WRITEAPPEND,
                 WriteDisposition.WRITETRUNCATE,
             ]:
-                logger.info(format_message(f'creating artifacts for "{task.task_id}"'))
+
                 table_def_content = [
                     {
                         "name": field.name,
@@ -135,23 +157,6 @@ def buildartifacts(logger: ILogger, args: dict, config: dict) -> int:
                         f'table definition created "{table_definition}.json"'
                     )
                 )
-
-                # for each source table, remove alias to create a unique list
-                # even if we use the same source more than once
-                for key in task.parameters["source_tables"].keys():
-                    table = task.parameters["source_tables"][key]
-                    table.alias = ""
-                    if (
-                        re.search(
-                            r"_tds_",
-                            table.dataset_name
-                            if table.dataset_name
-                            else config.get("properties", {}).get("dataset_source"),
-                            re.IGNORECASE,
-                        )
-                        and table not in tables
-                    ):
-                        tables.append(table)
 
                 table_build_config = [
                     {
