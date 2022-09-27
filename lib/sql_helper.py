@@ -131,7 +131,12 @@ def create_sql(logger: ILogger, task: Task, dataset_staging: str = None) -> str:
     )
 
     logger.info(f"creating sql for table type {sqltask.parameters.target_type.name}")
-    if sqltask.parameters.target_type == TableType.TYPE1:
+    if sqltask.parameters.write_disposition == WriteDisposition.DELETE:
+        sql = create_truncate_table_sql(
+            logger,
+            sqltask,
+        )
+    elif sqltask.parameters.target_type == TableType.TYPE1:
         sql = create_type_1_sql(
             logger,
             sqltask,
@@ -183,7 +188,7 @@ def create_delta_conditions(logger: ILogger, task: SQLTask) -> list[Condition]:
         )
 
         upper_bound = None
-        if delta.lower_bound == "@LOWER_DATE_BOUND":
+        if delta.lower_bound.upper() == "@LOWER_DATE_BOUND":
             upper_bound = "parse_timestamp('%d-%b-%Y %H:%M:%E6S', @upper_date_bound)"
         elif delta.upper_bound:
             upper_bound = (
@@ -256,6 +261,9 @@ def create_type_1_sql(
     sql = []
 
     if len(delta):
+        if wtask.parameters.where is None:
+            wtask.parameters.where = []
+
         for d in delta:
             wtask.parameters.where.append(d)
 
@@ -264,7 +272,9 @@ def create_type_1_sql(
         wtask.parameters.destination_table = re.sub(
             destination_prefix,
             td_prefix,
-            f"{wtask.parameters.destination_table}_p1",
+            f"{wtask.parameters.destination_table}_p1"
+            if task.parameters.write_disposition != WriteDisposition.WRITETRANSIENT
+            else wtask.parameters.destination_table,
             0,
             re.MULTILINE,
         )
@@ -280,14 +290,15 @@ def create_type_1_sql(
             if not field.pk:
                 dw_index = i + 1
                 break
-        wtask.parameters.source_to_target.insert(
-            dw_index,
-            Field(
-                transformation=f"current_timestamp()",
-                data_type="TIMESTAMP",
-                name="dw_last_modified_dt",
-            ),
-        )
+        if wtask.parameters.write_disposition != WriteDisposition.WRITETRANSIENT:
+            wtask.parameters.source_to_target.insert(
+                dw_index,
+                Field(
+                    transformation=f"current_timestamp()",
+                    data_type="TIMESTAMP",
+                    name="dw_last_modified_dt",
+                ),
+            )
 
         sql.append(create_sql_comment(logger, "Create target table."))
 
@@ -298,7 +309,10 @@ def create_type_1_sql(
         )
     )
 
-    if len(delta):
+    if (
+        len(delta)
+        and task.parameters.write_disposition != WriteDisposition.WRITETRANSIENT
+    ):
         wtask.parameters.driving_table = f"{wtask.parameters.destination_dataset}.{wtask.parameters.destination_table}"
         wtask.parameters.destination_dataset = task.parameters.destination_dataset
         wtask.parameters.destination_table = task.parameters.destination_table
@@ -609,6 +623,9 @@ def create_type_2_sql(
         wtask.add_analytic(analytic)
     delta = create_delta_conditions(logger, task)
     if len(delta):
+        if wtask.parameters.where is None:
+            wtask.parameters.where = []
+
         for d in delta:
             wtask.parameters.where.append(d)
 
@@ -961,6 +978,30 @@ def create_type_2_delta_condition(logger: ILogger, task: SQLTask) -> dict:
 
     logger.info(f"COMPLETED SUCCESSFULLY".center(100, "-"))
     return outp
+
+
+def create_truncate_table_sql(
+    logger: ILogger,
+    task: SQLTask,
+) -> str:
+    """
+    > This function creates a SQL statement to truncate a table
+
+    Args:
+      logger (ILogger): ILogger,
+      task (SQLTask): SQLTask
+
+    Returns:
+      A string
+    """
+
+    logger.info(f"STARTED".center(100, "-"))
+    sql = [
+        f"{task.parameters.destination_dataset}.{task.parameters.destination_table}:DELETE:",
+        f"truncate table {task.parameters.destination_dataset}.{task.parameters.destination_table};",
+    ]
+    logger.info(f"COMPLETED SUCCESSFULLY".center(100, "-"))
+    return sql
 
 
 def create_table_query(
