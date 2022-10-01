@@ -79,6 +79,8 @@ class Operator(Enum):
     LE = "<="
     NULL = "is null"
     NOTNULL = "is not null"
+    IN = "in"
+    NOTin = "not in"
     NONE = None
 
 

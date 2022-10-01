@@ -4,6 +4,8 @@ __pycache__/
 *data/*
 /.vscode/
 **/logs/*
+/batch_application/*
+/bq_application/*
 
 # files
 *.log

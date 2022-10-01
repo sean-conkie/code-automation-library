@@ -1175,8 +1175,16 @@ def create_sql_conditions(logger: ILogger, task: SQLTask) -> dict:
 
                 left = f"{condition.fields[0]}"
                 right = f"{condition.fields[1]}"
+
+                open_bracket = (
+                    "(" if condition.operator.value in ["in", "not in"] else ""
+                )
+                close_bracket = (
+                    ")" if condition.operator.value in ["in", "not in"] else ""
+                )
+
                 frm.append(
-                    f"{prefix}{on_prefix}{left.ljust(pad)} {condition.operator.value} {right}{on_suffix}"
+                    f"{prefix}{on_prefix}{left.ljust(pad)} {condition.operator.value} {open_bracket}{right}{close_bracket}{on_suffix}"
                 )
 
     where = (
@@ -1227,8 +1235,10 @@ def create_sql_where(logger: ILogger, conditions: list[Condition]) -> str:
         left_table = condition.fields[0] if condition.fields[0] else ""
         right_table = condition.fields[1] if condition.fields[1] else ""
 
+        open_bracket = "(" if condition.operator.value in ["in", "not in"] else ""
+        close_bracket = ")" if condition.operator.value in ["in", "not in"] else ""
         where.append(
-            f"{prefix}{left_table.ljust(pad)} {condition.operator.value} {right_table}"
+            f"{prefix}{left_table.ljust(pad)} {condition.operator.value} {open_bracket}{right_table}{close_bracket}"
         )
 
     logger.info(f"COMPLETED SUCCESSFULLY".center(100, "-"))
