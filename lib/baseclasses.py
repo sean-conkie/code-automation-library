@@ -607,10 +607,10 @@ class Field(object):
         """
         If the transformation is not null, return the transformation, otherwise return the source
         column.
-        
+
         Args:
           default_source_name (str): The name of the source table if the source table is not specified.
-        
+
         Returns:
           The source column name, the source table name, or the transformation.
         """
