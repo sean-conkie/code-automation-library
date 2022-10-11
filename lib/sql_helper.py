@@ -1123,6 +1123,9 @@ def create_sql_select(logger: ILogger, task: SQLTask) -> str:
 
         source = column.source(DEFAULT_SOURCE_ALIAS)
 
+        if column.default:
+            source = f"ifnull({source},{column.default})"
+
         alias = (
             column.name.rjust(
                 max(
