@@ -403,6 +403,7 @@ class Field(object):
         source_column: str = None,
         source_table: SourceTable = None,
         transformation: str = None,
+        default: str = None,
         nullable: bool = None,
         pk: bool = None,
         hk: bool = None,
@@ -416,6 +417,7 @@ class Field(object):
         self._nullable = nullable
         self._pk = pk
         self._hk = hk
+        self._default = default
 
     def __str__(self) -> str:
         return str(todict(self))
@@ -584,7 +586,34 @@ class Field(object):
         """
         self._hk = value
 
+    @property
+    def default(self) -> str:
+        """
+        It returns the default value of the object.
+
+        Returns:
+          The default value of the question.
+        """
+        return self._default
+
+    @default.setter
+    def default(self, value: str) -> None:
+        """
+        Sets the default
+        """
+        self._default = value
+
     def source(self, default_source_name: str = None) -> str:
+        """
+        If the transformation is not null, return the transformation, otherwise return the source
+        column.
+
+        Args:
+          default_source_name (str): The name of the source table if the source table is not specified.
+
+        Returns:
+          The source column name, the source table name, or the transformation.
+        """
 
         if isnullorwhitespace(self._transformation):
             if self._source_table is None and isnullorwhitespace(default_source_name):
@@ -1676,6 +1705,7 @@ def converttoobj(
                 else None,
                 transformation=field.get("transformation"),
                 nullable=field.get("is_nullable"),
+                default=field.get("default"),
                 pk=field.get("is_primary_key"),
                 hk=field.get("is_history_key"),
             )
