@@ -2,8 +2,6 @@
 A data pipeline using Cloud Composer and other GCP tools.
 
 [![GitHub Super-Linter](https://github.com/sean-conkie/sconkie-cloud-composer/workflows/Lint%20Code%20Base/badge.svg)](https://github.com/marketplace/actions/super-linter)
-[![Total alerts](https://img.shields.io/lgtm/alerts/g/sean-conkie/sconkie-cloud-composer.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/sean-conkie/sconkie-cloud-composer/alerts/)
-[![Language grade: Python](https://img.shields.io/lgtm/grade/python/g/sean-conkie/sconkie-cloud-composer.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/sean-conkie/sconkie-cloud-composer/context:python)
 [![Validate DAG Config](https://github.com/sean-conkie/sconkie-cloud-composer/actions/workflows/validatedagconfig.yml/badge.svg)](https://github.com/sean-conkie/sconkie-cloud-composer/actions/workflows/validatedagconfig.yml)
 
 ## IAM
